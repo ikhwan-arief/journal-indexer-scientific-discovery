@@ -445,7 +445,8 @@
 		const UNACCREDITED_LABEL = "Unaccredited";
 		const UNINDEXED_LABEL = "Unindexed";
 		const API_BASE_URL = "http://127.0.0.1:8000/api/v1";
-		const REPO_STATE_URL = "http://127.0.0.1:8787/state";
+		const REPO_STATE_SOURCES = ["./data/repo_state.json", "http://127.0.0.1:8787/state"];
+		const LOCAL_STATE_WRITE_URL = "http://127.0.0.1:8787/state";
 		const PERSISTENT_KEYS = new Set([
 			STORAGE_KEYS.endpoints,
 			STORAGE_KEYS.harvestedArticles,
@@ -787,13 +788,18 @@
 		}
 
 		async function loadPersistentStateFromRepo() {
+			isHydratingPersistentState = true;
 			try {
-				const response = await fetch(REPO_STATE_URL, { method: "GET" });
-				if (!response.ok) return;
-				const state = await response.json();
-				isHydratingPersistentState = true;
-				applyPersistentStateSnapshot(state);
-			} catch {
+				for (const sourceUrl of REPO_STATE_SOURCES) {
+					try {
+						const response = await fetch(sourceUrl, { method: "GET" });
+						if (!response.ok) continue;
+						const state = await response.json();
+						applyPersistentStateSnapshot(state);
+						return;
+					} catch {
+					}
+				}
 			} finally {
 				isHydratingPersistentState = false;
 			}
@@ -812,7 +818,7 @@
 		async function savePersistentStateToRepo() {
 			if (isHydratingPersistentState) return;
 			try {
-				await fetch(REPO_STATE_URL, {
+				await fetch(LOCAL_STATE_WRITE_URL, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify(collectPersistentStateSnapshot())
