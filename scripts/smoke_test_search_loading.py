@@ -103,8 +103,8 @@ def main() -> int:
         title_page.wait_for_selector("#search-form")
         title_page.wait_for_function(
             """() => {
-                const text = document.querySelector('.empty-state strong')?.textContent || '';
-                return text.includes('Search dataset is ready on demand.');
+                const countryOptions = document.querySelectorAll('#country-filter option');
+                return countryOptions.length > 1;
             }""",
             timeout=10000,
         )
