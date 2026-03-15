@@ -94,3 +94,9 @@ The repository includes a GitHub Actions workflow that:
 On pull requests, the workflow stops after build and smoke-test validation. Artifact upload and GitHub Pages deployment remain limited to `main` pushes and manual workflow runs.
 
 If you know the final public URL, set the repository variable or environment variable `SITE_URL` during build to enable canonical tags and a sitemap.
+
+## Container deployment
+
+If this project will be deployed to a regular server with Docker or Docker Compose instead of GitHub Pages, use the dedicated guide in `deployment/container/README.md`.
+
+That location is intentional because `docs/` is generated site output and is not a stable place for handwritten operational documentation.

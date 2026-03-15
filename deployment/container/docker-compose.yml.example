@@ -1,0 +1,12 @@
+services:
+  journal-discovery:
+    build:
+      context: ../..
+      dockerfile: deployment/container/Dockerfile
+      args:
+        SITE_URL: https://journals.example.com
+    image: journal-discovery:latest
+    container_name: journal-discovery
+    restart: unless-stopped
+    ports:
+      - "8080:80"

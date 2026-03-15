@@ -1,0 +1,10 @@
+.git
+.github
+build
+docs
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.log
+deployment/container/docker-compose.yml
