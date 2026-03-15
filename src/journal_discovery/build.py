@@ -91,6 +91,8 @@ class JournalRecord:
             "title": self.title,
             "publisher": self.publisher,
             "country": self.country,
+        "categories": self.categories,
+        "areas": self.areas,
             "sjr_quartile": self.sjr_quartile,
             "wos_indexed": self.wos_indexed,
             "doaj_indexed": self.doaj_indexed,
@@ -502,6 +504,11 @@ def render_initial_rows(records: list[JournalRecord]) -> str:
     for record in records[:10]:
         href = record.journal_url or record.profile_path
         external_attrs = ' target="_blank" rel="noopener noreferrer"' if record.journal_url else ""
+        index_labels = ['<span class="label label-scopus">Scopus</span>']
+        if record.wos_indexed:
+            index_labels.append('<span class="label label-wos">WoS</span>')
+        if record.doaj_indexed:
+            index_labels.append('<span class="label label-doaj">DOAJ</span>')
         rows.append(
             f"""
             <tr>
@@ -511,12 +518,19 @@ def render_initial_rows(records: list[JournalRecord]) -> str:
                   <div class=\"mini-meta\">Rank {record.rank} · Source ID {html.escape(record.sourceid)}</div>
                 </div>
               </td>
-              <td>{html.escape(record.publisher or 'Tidak tersedia')}</td>
-              <td>{html.escape(record.country or 'Tidak tersedia')}</td>
-              <td><span class=\"index-check\" data-active=\"true\">✓</span></td>
-              <td><span class=\"index-check\" data-active=\"{'true' if record.wos_indexed else 'false'}\">{'✓' if record.wos_indexed else '—'}</span></td>
-              <td><span class=\"index-check\" data-active=\"{'true' if record.doaj_indexed else 'false'}\">{'✓' if record.doaj_indexed else '—'}</span></td>
-              <td>{html.escape(record.sjr_quartile or '—')}</td>
+              <td>
+                <div class=\"table-publisher\">{html.escape(record.publisher or 'Not available')}</div>
+                <div class=\"mini-meta\">{html.escape(record.country or 'Country not available')}</div>
+              </td>
+              <td>
+                <div class=\"topic-stack\">
+                  <div class=\"topic-primary\">{html.escape(record.areas or 'Area not available')}</div>
+                  <div class=\"topic-secondary\">{html.escape(record.categories or 'Categories not available')}</div>
+                </div>
+              </td>
+              <td><div class=\"status-row\">{''.join(index_labels)}</div></td>
+              <td><span class=\"pill pill-quartile\">{html.escape(record.sjr_quartile or '—')}</span></td>
+              <td><a class=\"table-action-link\" href=\"{html.escape(record.profile_path, quote=True)}\">View profile</a></td>
             </tr>
             """.strip()
         )
@@ -561,7 +575,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
               <input type=\"hidden\" name=\"scope\" value=\"abstract\">
               <label class=\"field abstract-field\" for=\"abstract-query\">
                 <span>Paste article abstract</span>
-                <textarea id=\"abstract-query\" name=\"q\" rows=\"8\" placeholder=\"Paste the user's article abstract here. The app will match it to journal Categories and Areas, then return the most suitable journal profiles.\"></textarea>
+                <textarea id=\"abstract-query\" name=\"q\" rows=\"8\" placeholder=\"Paste the article's abstract here. The app will match it to journal categories and areas, then suggest the suitable journals based on the abstract's words and sentences.\"></textarea>
               </label>
               <div class=\"hero-actions\">
                 <button type=\"submit\">Find matching journals</button>
@@ -578,16 +592,22 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
       <section class=\"section\">
         <div class=\"shell\" id=\"app-error\"></div>
         <div class=\"shell\">
-          <div class=\"section-heading\">
+          <div class="section-heading section-heading-results">
             <div>
-              <h2>Front-page journal table</h2>
+              <p class="eyebrow results-eyebrow">Journal directory</p>
+              <h2>Browse verified journal profiles</h2>
               <p class=\"table-note\">The check symbols mark whether the journal exists in the Scopus, the WoS, and the DOAJ when available. The SJR column uses the available <strong>SJR Best Quartile</strong> field from the source dataset.</p>
             </div>
             <div class=\"table-chip\" id=\"home-summary\">Preparing journal table…</div>
           </div>
           <div class=\"table-card\">
             <div class=\"table-controls\">
-              <a class=\"button button-secondary\" href=\"search/\">Search by title, keyword, or URL</a>
+              <div class="table-filter-pills">
+                <span class="table-pill">Scopus baseline</span>
+                <span class="table-pill">WoS cross-check</span>
+                <span class="table-pill">DOAJ flag when available</span>
+              </div>
+              <a class="button button-secondary table-cta-button" href="search/">Open advanced search</a>
               <div class=\"table-chip\"><strong>10 journals</strong> per page</div>
             </div>
             <div class=\"table-wrap\">
@@ -596,11 +616,10 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
                   <tr>
                     <th>Journal title</th>
                     <th>Publisher</th>
-                    <th>Country</th>
-                    <th>Scopus</th>
-                    <th>WoS</th>
-                    <th>DOAJ</th>
+                    <th>Focus areas</th>
+                    <th>Indexed in</th>
                     <th>SJR quartile</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody id=\"journal-table-body\">

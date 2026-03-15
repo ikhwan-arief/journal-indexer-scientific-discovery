@@ -44,6 +44,15 @@ function createBadge(text, className) {
   return badge;
 }
 
+function createIndexBadgeRow(record) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "status-row";
+  wrapper.appendChild(createBadge("Scopus", "label-scopus"));
+  if (record.wos_indexed) wrapper.appendChild(createBadge("WoS", "label-wos"));
+  if (record.doaj_indexed) wrapper.appendChild(createBadge("DOAJ", "label-doaj"));
+  return wrapper;
+}
+
 function createIndexCell(active) {
   const cell = document.createElement("td");
   const marker = document.createElement("span");
@@ -73,6 +82,14 @@ function createTitleLink(record, siteRoot) {
     link.target = "_blank";
     link.rel = "noopener noreferrer";
   }
+  return link;
+}
+
+function createHomeActionLink(record, siteRoot) {
+  const link = document.createElement("a");
+  link.className = "table-action-link";
+  link.href = joinRelative(siteRoot, record.profile_path);
+  link.textContent = "View profile";
   return link;
 }
 
@@ -122,6 +139,11 @@ function renderHomePage(records, siteRoot) {
     const start = (page - 1) * perPage;
     const pageItems = records.slice(start, start + perPage);
     tbody.replaceChildren();
+
+    if (summary) {
+      summary.textContent = `Showing ${start + 1}-${start + pageItems.length} of ${records.length.toLocaleString("en-US")} journals.`;
+    }
+
     for (const record of pageItems) {
       const row = document.createElement("tr");
 
@@ -137,20 +159,45 @@ function renderHomePage(records, siteRoot) {
       row.appendChild(titleCell);
 
       const publisherCell = document.createElement("td");
-      publisherCell.textContent = safeText(record.publisher);
+      const publisherWrap = document.createElement("div");
+      publisherWrap.className = "table-publisher";
+      publisherWrap.textContent = safeText(record.publisher, "Not available");
+      const publisherMeta = document.createElement("div");
+      publisherMeta.className = "mini-meta";
+      publisherMeta.textContent = safeText(record.country, "Country not available");
+      publisherCell.appendChild(publisherWrap);
+      publisherCell.appendChild(publisherMeta);
       row.appendChild(publisherCell);
 
-      const countryCell = document.createElement("td");
-      countryCell.textContent = safeText(record.country);
-      row.appendChild(countryCell);
+      const topicCell = document.createElement("td");
+      const topicWrap = document.createElement("div");
+      topicWrap.className = "topic-stack";
+      const topicPrimary = document.createElement("div");
+      topicPrimary.className = "topic-primary";
+      topicPrimary.textContent = safeText(record.areas, "Area not available");
+      const topicSecondary = document.createElement("div");
+      topicSecondary.className = "topic-secondary";
+      topicSecondary.textContent = safeText(record.categories, "Categories not available");
+      topicWrap.appendChild(topicPrimary);
+      topicWrap.appendChild(topicSecondary);
+      topicCell.appendChild(topicWrap);
+      row.appendChild(topicCell);
 
-      row.appendChild(createIndexCell(record.scopus_indexed));
-      row.appendChild(createIndexCell(record.wos_indexed));
-      row.appendChild(createIndexCell(record.doaj_indexed));
+      const indexedCell = document.createElement("td");
+      indexedCell.appendChild(createIndexBadgeRow(record));
+      row.appendChild(indexedCell);
 
       const quartileCell = document.createElement("td");
-      quartileCell.textContent = safeText(record.sjr_quartile, DASH_MARK);
+      const quartilePill = document.createElement("span");
+      quartilePill.className = "pill pill-quartile";
+      quartilePill.textContent = safeText(record.sjr_quartile, DASH_MARK);
+      quartileCell.appendChild(quartilePill);
       row.appendChild(quartileCell);
+
+      const actionCell = document.createElement("td");
+      actionCell.appendChild(createHomeActionLink(record, siteRoot));
+      row.appendChild(actionCell);
+
       tbody.appendChild(row);
     }
 
