@@ -1,0 +1,89 @@
+name: Manual Refresh and Deploy Journal Discovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      fetch_doaj:
+        description: Download the latest DOAJ CSV before rebuilding
+        required: true
+        type: boolean
+        default: true
+      run_smoke_test:
+        description: Run the browser smoke test as part of the guarded refresh
+        required: true
+        type: boolean
+        default: true
+      deploy_pages:
+        description: Deploy the rebuilt docs output to GitHub Pages
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-pages-refresh
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install browser test dependency
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Install Chromium for Playwright
+        run: python -m playwright install --with-deps chromium
+
+      - name: Optionally download latest DOAJ CSV
+        if: ${{ inputs.fetch_doaj }}
+        run: |
+          mkdir -p data/raw
+          curl -L --retry 3 --fail https://doaj.org/csv -o "data/raw/doaj.csv" || echo "DOAJ download skipped; build will continue without enrichment."
+
+      - name: Run guarded dataset refresh workflow
+        env:
+          SITE_URL: ${{ vars.SITE_URL }}
+        run: |
+          set -euo pipefail
+          cmd=(python scripts/update_source_data.py --scimago data/raw/scimagojr.csv --wos data/raw/scimagojr_wos.csv)
+          if [[ -f data/raw/doaj.csv ]]; then
+            cmd+=(--doaj data/raw/doaj.csv)
+          fi
+          if [[ "${{ inputs.run_smoke_test }}" != "true" ]]; then
+            cmd+=(--skip-smoke-test)
+          fi
+          "${cmd[@]}"
+
+      - name: Upload artifact
+        if: ${{ inputs.deploy_pages }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+  deploy:
+    if: ${{ inputs.deploy_pages }}
+    needs: refresh
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

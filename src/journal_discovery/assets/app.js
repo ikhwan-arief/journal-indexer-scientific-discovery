@@ -89,10 +89,15 @@ function createHomeActionLink(record, siteRoot) {
   return link;
 }
 
+function buildProfilePath(record) {
+  const sourceid = encodeURIComponent(String(record?.sourceid || ""));
+  return sourceid ? `journal/?sourceid=${sourceid}` : "journal/";
+}
+
 function prepareRecords(records) {
   for (const record of records) {
-    record.scopus_indexed = true;
-    record.profile_path = `journals/${record.slug}/`;
+    record.scopus_indexed = record.scopus_indexed !== false;
+    record.profile_path = buildProfilePath(record);
     const labels = ["Scopus"];
     if (record.wos_indexed) labels.push("WoS");
     if (record.doaj_indexed) labels.push("DOAJ");
@@ -471,6 +476,210 @@ function buildNavigationDetailItem(label, href, linkText, titleText) {
   return wrapper;
 }
 
+function setMetaContent(selector, value) {
+  const element = document.querySelector(selector);
+  if (element) {
+    element.setAttribute("content", value);
+  }
+}
+
+function updateProfileMetadata(record) {
+  const description = `${record.title} journal profile with indexing labels, publisher, country, ISSN, website availability, APC status, license, and SJR best quartile.`;
+  document.title = `${record.title} | Journal Discovery`;
+  setMetaContent('meta[name="description"]', description);
+  setMetaContent('meta[property="og:title"]', record.title);
+  setMetaContent('meta[property="og:description"]', description);
+}
+
+function renderProfileEmptyState(titleText, bodyText) {
+  const root = document.querySelector("#profile-root");
+  if (!root) {
+    return;
+  }
+
+  root.replaceChildren();
+
+  const section = document.createElement("section");
+  section.className = "section";
+  const shell = document.createElement("div");
+  shell.className = "shell";
+  const empty = document.createElement("div");
+  empty.className = "empty-state";
+
+  const title = document.createElement("strong");
+  title.textContent = titleText;
+  empty.appendChild(title);
+
+  const body = document.createElement("span");
+  body.textContent = bodyText;
+  empty.appendChild(body);
+
+  shell.appendChild(empty);
+  section.appendChild(shell);
+  root.appendChild(section);
+
+  const footerMeta = document.querySelector("#profile-footer-meta");
+  if (footerMeta) {
+    footerMeta.textContent = "Load a journal profile to view source and rank details.";
+  }
+}
+
+function renderProfilePage(record, siteRoot) {
+  const root = document.querySelector("#profile-root");
+  if (!root) {
+    return;
+  }
+
+  root.replaceChildren();
+  updateProfileMetadata(record);
+
+  const searchUrl = `${joinRelative(siteRoot, "search/")}?q=${encodeURIComponent(record.title)}&scope=title`;
+
+  const heroSection = document.createElement("section");
+  heroSection.className = "profile-hero";
+  const heroShell = document.createElement("div");
+  heroShell.className = "shell";
+
+  const breadcrumbs = document.createElement("div");
+  breadcrumbs.className = "breadcrumbs";
+  const breadcrumbHome = document.createElement("a");
+  breadcrumbHome.href = joinRelative(siteRoot, "");
+  breadcrumbHome.textContent = "Home";
+  breadcrumbs.appendChild(breadcrumbHome);
+  breadcrumbs.appendChild(document.createTextNode(" / "));
+  const breadcrumbSearch = document.createElement("a");
+  breadcrumbSearch.href = joinRelative(siteRoot, "search/");
+  breadcrumbSearch.textContent = "Search";
+  breadcrumbs.appendChild(breadcrumbSearch);
+  breadcrumbs.appendChild(document.createTextNode(" / "));
+  const breadcrumbCurrent = document.createElement("span");
+  breadcrumbCurrent.textContent = record.title;
+  breadcrumbs.appendChild(breadcrumbCurrent);
+  heroShell.appendChild(breadcrumbs);
+
+  const heroPanel = document.createElement("div");
+  heroPanel.className = "hero-panel";
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "eyebrow";
+  eyebrow.textContent = "Journal profile";
+  heroPanel.appendChild(eyebrow);
+  const title = document.createElement("h1");
+  title.textContent = record.title;
+  heroPanel.appendChild(title);
+  const copy = document.createElement("p");
+  copy.className = "profile-copy";
+  copy.textContent = "This page brings together journal details, indexing labels, and access information when available.";
+  heroPanel.appendChild(copy);
+  heroPanel.appendChild(createLabelRow(record));
+
+  const heroLinks = document.createElement("div");
+  heroLinks.className = "profile-links";
+  const similarLink = document.createElement("a");
+  similarLink.className = "button button-secondary";
+  similarLink.href = searchUrl;
+  similarLink.textContent = "Search similar journals";
+  heroLinks.appendChild(similarLink);
+  const homeLink = document.createElement("a");
+  homeLink.className = "button button-primary";
+  homeLink.href = joinRelative(siteRoot, "");
+  homeLink.textContent = "Back to home";
+  heroLinks.appendChild(homeLink);
+  heroPanel.appendChild(heroLinks);
+
+  heroShell.appendChild(heroPanel);
+  heroSection.appendChild(heroShell);
+  root.appendChild(heroSection);
+
+  const section = document.createElement("section");
+  section.className = "section";
+  const shell = document.createElement("div");
+  shell.className = "shell";
+  const card = document.createElement("div");
+  card.className = "profile-card";
+  const layout = document.createElement("div");
+  layout.className = "profile-layout";
+
+  const main = document.createElement("div");
+  main.className = "profile-main detail-grid";
+  main.appendChild(buildDetailItem("Website", record.journal_url, siteRoot, true));
+  main.appendChild(buildDetailItem("Publisher", record.publisher));
+  main.appendChild(buildDetailItem("Country", record.country));
+  main.appendChild(buildDetailItem("Region", record.region));
+  main.appendChild(buildDetailItem("Indexed In", record.index_summary));
+  main.appendChild(buildDetailItem("Best SJR Quartile", record.sjr_best_quartile));
+  main.appendChild(buildDetailItem("Directory Quartile Label", record.sjr_quartile));
+  main.appendChild(buildDetailItem("APC Status", record.apc_status));
+  main.appendChild(buildDetailItem("License", record.license));
+  main.appendChild(buildDetailItem("Author Holds Copyright", record.author_holds_copyright));
+  main.appendChild(buildDetailItem("ISSN", (record.issns || []).join(", ")));
+  main.appendChild(buildDetailItem("Coverage", record.coverage));
+  main.appendChild(buildDetailItem("Categories", record.categories));
+  main.appendChild(buildDetailItem("Areas", record.areas));
+  main.appendChild(buildDetailItem("Open Access", record.open_access));
+  main.appendChild(buildDetailItem("Open Access Diamond", record.open_access_diamond));
+  layout.appendChild(main);
+
+  const side = document.createElement("aside");
+  side.className = "profile-side detail-grid";
+  side.appendChild(buildDetailItem("Source ID", record.sourceid));
+  side.appendChild(buildNavigationDetailItem("Search", searchUrl, "Search similar journals", `Search journals similar to ${record.title}`));
+  side.appendChild(buildNavigationDetailItem("Navigation", joinRelative(siteRoot, ""), "Back to home", "Return to the journal directory"));
+  side.appendChild(buildDetailItem("Data note", "Website, APC, license, and copyright details are shown when available."));
+  layout.appendChild(side);
+
+  card.appendChild(layout);
+  shell.appendChild(card);
+  section.appendChild(shell);
+  root.appendChild(section);
+
+  const footerMeta = document.querySelector("#profile-footer-meta");
+  if (footerMeta) {
+    footerMeta.textContent = `Source ID ${safeText(record.sourceid, "-")} · Rank ${safeText(record.rank, "-")}`;
+  }
+}
+
+async function renderDynamicProfile(profileIndex, siteRoot) {
+  const params = new URLSearchParams(window.location.search);
+  const sourceid = params.get("sourceid") || "";
+
+  if (!sourceid) {
+    renderProfileEmptyState(
+      "Journal profile not specified.",
+      "Open a journal profile from the browse or search interface to load its details."
+    );
+    return;
+  }
+
+  const chunkPath = profileIndex.sourceid_to_chunk?.[sourceid];
+  if (!chunkPath) {
+    renderProfileEmptyState(
+      "Journal profile not found.",
+      "This source ID is not present in the current generated dataset."
+    );
+    return;
+  }
+
+  const response = await fetch(joinRelative(siteRoot, chunkPath), { credentials: "same-origin" });
+  if (!response.ok) {
+    throw new Error(`Failed to load journal profile data: ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const records = payload.records || [];
+  prepareRecords(records);
+  const record = records.find((item) => String(item.sourceid || "") === sourceid);
+
+  if (!record) {
+    renderProfileEmptyState(
+      "Journal profile not found.",
+      "The current dataset does not contain a matching record in the expected chunk."
+    );
+    return;
+  }
+
+  renderProfilePage(record, siteRoot);
+}
+
 function renderSearchPage(manifest, siteRoot) {
   const form = document.querySelector("#search-form");
   const results = document.querySelector("#search-results");
@@ -792,7 +1001,11 @@ async function init() {
   const page = body.dataset.page;
   const siteRoot = body.dataset.siteRoot || ".";
   const dataUrl = body.dataset.dataUrl;
-  if (!page || !dataUrl) {
+  if (!page) {
+    return;
+  }
+
+  if (!dataUrl) {
     return;
   }
 
@@ -809,6 +1022,9 @@ async function init() {
   }
   if (page === "search") {
     renderSearchPage(payload, siteRoot);
+  }
+  if (page === "profile") {
+    await renderDynamicProfile(payload, siteRoot);
   }
 }
 

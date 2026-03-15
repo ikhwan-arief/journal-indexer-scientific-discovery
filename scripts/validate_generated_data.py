@@ -16,6 +16,8 @@ from journal_discovery.build import normalize_text, search_prefix
 DOCS_DIR = ROOT / "docs"
 HOME_PATH = DOCS_DIR / "data" / "home.json"
 MANIFEST_PATH = DOCS_DIR / "data" / "search-manifest.json"
+PROFILE_INDEX_PATH = DOCS_DIR / "data" / "profile-index.json"
+LEGACY_REDIRECT_PATH = DOCS_DIR / "404.html"
 
 REQUIRED_HOME_KEYS = {"sourceid", "title", "slug"}
 REQUIRED_SEARCH_KEYS = {"sourceid", "title", "slug", "categories", "areas"}
@@ -38,8 +40,12 @@ def record_key(record: dict[str, object]) -> tuple[str, str]:
 
 
 def main() -> int:
+    if not LEGACY_REDIRECT_PATH.exists():
+        raise SystemExit("Missing generated file: docs/404.html")
+
     home_payload = load_json(HOME_PATH)
     manifest = load_json(MANIFEST_PATH)
+    profile_index = load_json(PROFILE_INDEX_PATH)
 
     summary = manifest.get("summary") or {}
     expected_total = int(summary.get("total_journals") or 0)
@@ -62,6 +68,10 @@ def main() -> int:
     title_prefix_chunks = manifest.get("title_prefix_chunks") or {}
     if not isinstance(title_prefix_chunks, dict) or not title_prefix_chunks:
         raise SystemExit("search-manifest.json does not contain title_prefix_chunks.")
+
+    sourceid_to_chunk = profile_index.get("sourceid_to_chunk") or {}
+    if not isinstance(sourceid_to_chunk, dict) or not sourceid_to_chunk:
+        raise SystemExit("profile-index.json does not contain sourceid_to_chunk.")
 
     search_records: list[dict[str, object]] = []
     records_by_chunk: dict[str, list[dict[str, object]]] = {}
@@ -97,6 +107,19 @@ def main() -> int:
         raise SystemExit("Duplicate sourceid/slug pairs detected in home.json.")
     if home_keys != seen_search_keys:
         raise SystemExit("home.json and search chunk records do not describe the same journal set.")
+
+    search_sourceids = {str(record.get("sourceid") or "") for record in search_records}
+    if set(sourceid_to_chunk) != search_sourceids:
+        raise SystemExit("profile-index.json source IDs do not match the generated search dataset.")
+
+    for chunk_path, records in records_by_chunk.items():
+        for record in records:
+            sourceid = str(record.get("sourceid") or "")
+            mapped_chunk = sourceid_to_chunk.get(sourceid)
+            if mapped_chunk != chunk_path:
+                raise SystemExit(
+                    f"profile-index.json maps sourceid {sourceid} to {mapped_chunk}, expected {chunk_path}."
+                )
 
     computed_countries = sorted(
         {
@@ -143,10 +166,11 @@ def main() -> int:
                 )
 
     print(
-        "Generated data validation passed: home/search totals match, shard files exist, title-prefix mappings are consistent, and country metadata matches the chunk dataset."
+        "Generated data validation passed: home/search totals match, shard files exist, the 404 legacy redirect page exists, profile index mappings are consistent, title-prefix mappings are consistent, and country metadata matches the chunk dataset."
     )
     print(f"Validated journals: {expected_total}")
     print(f"Validated shard files: {len(chunk_paths)}")
+    print(f"Validated profile index entries: {len(sourceid_to_chunk)}")
     print(f"Validated title prefixes: {len(title_prefix_chunks)}")
     return 0
 

@@ -4,22 +4,36 @@ Journal Discovery is a static journal discovery website designed for public host
 
 ## Current implementation
 
-- Uses Python and SQLite during the build step only.
+- Uses Python during the build step only.
 - Reads the active Scimago Journal Rank snapshot from `data/raw/scimagojr.csv`.
 - Reads the active WoS subset from `data/raw/scimagojr_wos.csv`.
 - Optionally reads DOAJ enrichment from `data/raw/doaj.csv`.
 - Generates a public static site into `docs/`.
-- Writes a lightweight `docs/data/home.json` for the front page plus a `docs/data/search-manifest.json` and sharded `docs/data/search-chunks/` files for on-demand search loading, with title-prefix shard hints so title searches can fetch fewer chunks first.
-- Builds a local SQLite database into `build/journal_discovery.db` for validation and future enrichment.
+- Writes a lightweight `docs/data/home.json` for the front page plus a `docs/data/search-manifest.json`, `docs/data/profile-index.json`, and sharded `docs/data/search-chunks/` files for on-demand search and profile loading, with title-prefix shard hints so title searches can fetch fewer chunks first.
 - Shows all journals from Scimago on the front page with 10 journals per page.
 - Provides a large abstract input on the front page so users can paste an article abstract and search for matching journals.
 - Shows `Scopus`, `WoS`, and `DOAJ` as check symbols in the front-page table.
 - Shows the SJR quartile on the front-page table.
-- Shows the `SJR Best Quartile` on each journal profile page.
+- Shows the `SJR Best Quartile` on a single runtime-loaded journal profile page keyed by stable `sourceid` values.
 - Exposes a search page for abstract, keyword, title, URL fragment, country, index filter, and quartile filter.
 - Scores abstract matching from the journal `Categories` and `Areas` fields in `scimagojr.csv`.
-- Shows `Categories` and `Areas` on journal profile pages and on the search result profile cards.
+- Shows `Categories` and `Areas` on the journal profile page and on the search result profile cards.
 - Fills journal website, APC status, license, and copyright fields from DOAJ when a journal matches by ISSN or unique exact title.
+
+## Profile page model
+
+- Journal detail pages are no longer generated as one folder per journal under `docs/journals/`.
+- The app now serves a single profile page at `docs/journal/index.html`.
+- Journal links use the stable Scimago `Sourceid` as the runtime identifier, for example `journal/?sourceid=12345`.
+- When the raw Scimago snapshot is replaced and rebuilt, the profile page continues to resolve records from the latest generated dataset without requiring per-journal page generation.
+- Existing legacy links of the form `journals/<slug>/` are redirected through `docs/404.html` to the new runtime profile URL on GitHub Pages.
+
+## Safe dataset refresh
+
+- Use `python scripts/update_source_data.py --scimago /path/to/scimagojr.csv --wos /path/to/scimagojr_wos.csv` to replace the active raw datasets, rebuild the site, validate the output, and run the browser smoke test in one command.
+- Add `--doaj /path/to/doaj.csv` when you also want to replace the enrichment snapshot in the same run.
+- The script backs up the current raw data first and restores it automatically if build, validation, or smoke testing fails.
+- The GitHub Pages workflow now uses the same guarded script, so local refreshes and CI refreshes follow one orchestration path.
 
 ## Known data constraints
 
@@ -69,7 +83,7 @@ Use the generated data validator to confirm that `home.json`, `search-manifest.j
 python scripts/validate_generated_data.py
 ```
 
-The validator checks that the generated journal totals match across the home and search datasets, every manifest shard exists, title-prefix chunk mappings stay consistent with the records inside each shard, and the manifest country list matches the generated search dataset.
+The validator checks that the generated journal totals match across the home and search datasets, every manifest shard exists, every profile index entry points to the correct chunk, title-prefix chunk mappings stay consistent with the records inside each shard, and the manifest country list matches the generated search dataset.
 
 1. Install the browser test dependency:
 
@@ -89,21 +103,21 @@ python -m playwright install chromium
 python scripts/smoke_test_search_loading.py
 ```
 
-The script serves `docs/` locally in a headless browser, confirms that no shard file is fetched on idle load, confirms that changing only the search scope still does not fetch shards, checks that title searches only fetch the shard files listed in `docs/data/search-manifest.json` for the relevant title prefix, verifies that a deep-linked filter state loads the full shard set, and confirms that an abstract-scoped search renders the match insight UI.
+The script serves `docs/` locally in a headless browser, confirms that no shard file is fetched on idle load, confirms that changing only the search scope still does not fetch shards, checks that title searches only fetch the shard files listed in `docs/data/search-manifest.json` for the relevant title prefix, verifies that a deep-linked filter state loads the full shard set, confirms that an abstract-scoped search renders the match insight UI, and verifies that a journal profile link resolves through the single dynamic profile page.
 
 ## Deployment
 
 The repository includes a GitHub Actions workflow that:
 
-- runs the Python build and browser smoke test on pull requests,
+- runs the guarded dataset refresh workflow on pull requests,
 - downloads the latest DOAJ CSV snapshot,
-- runs the Python build,
-- validates the generated JSON data,
-- installs Chromium and runs the browser smoke test against the generated `docs/` output,
+- runs `scripts/update_source_data.py` against the active raw snapshots so build, validation, and smoke-test behavior stay aligned with local usage,
 - uploads the generated `docs/` folder as the GitHub Pages artifact,
 - deploys the site to GitHub Pages.
 
-On pull requests, the workflow stops after build and smoke-test validation. Artifact upload and GitHub Pages deployment remain limited to `main` pushes and manual workflow runs.
+On pull requests, the workflow stops after build and smoke-test validation. Artifact upload and GitHub Pages deployment remain limited to `main` pushes.
+
+For a manual refresh path, use the dedicated GitHub Actions workflow `Manual Refresh and Deploy Journal Discovery`. It exposes booleans for downloading the latest DOAJ snapshot, keeping or skipping the smoke test, and choosing whether the refreshed `docs/` output should be deployed to GitHub Pages.
 
 If you know the final public URL, set the repository variable or environment variable `SITE_URL` during build to enable canonical tags and a sitemap.
 

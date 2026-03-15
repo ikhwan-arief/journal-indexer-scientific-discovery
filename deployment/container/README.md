@@ -9,9 +9,9 @@ This guide lives under `deployment/container/` on purpose:
 
 ## Deployment model
 
-The application does **not** need Python or SQLite at runtime.
+The application does **not** need Python at runtime.
 
-- Python and SQLite are used only while running `scripts/build_site.py`
+- Python is used only while running `scripts/build_site.py`
 - the final runtime is plain static HTML, CSS, and JSON served from `docs/`
 - the production container can therefore be a small Nginx image
 
@@ -280,7 +280,7 @@ A practical pattern is:
 
 This deployment is immutable and does not require a database volume.
 
-- no runtime SQLite file is needed
+- no runtime database file is needed
 - no application upload directory is needed
 - persistence is only needed if you separately store logs or backups on the host
 

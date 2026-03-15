@@ -6,7 +6,6 @@ import json
 import os
 import re
 import shutil
-import sqlite3
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -61,15 +60,19 @@ class JournalRecord:
         return f"journals/{self.slug}/"
 
     @property
+    def runtime_profile_path(self) -> str:
+        return f"journal/?sourceid={quote_plus(self.sourceid)}"
+
+    @property
     def index_summary(self) -> str:
-      labels: list[str] = []
-      if self.scopus_indexed:
-        labels.append("Scopus")
-      if self.wos_indexed:
-        labels.append("WoS")
-      if self.doaj_indexed:
-        labels.append("DOAJ")
-      return ", ".join(labels) if labels else NOT_AVAILABLE
+        labels: list[str] = []
+        if self.scopus_indexed:
+            labels.append("Scopus")
+        if self.wos_indexed:
+            labels.append("WoS")
+        if self.doaj_indexed:
+            labels.append("DOAJ")
+        return ", ".join(labels) if labels else NOT_AVAILABLE
 
     @property
     def search_text(self) -> str:
@@ -140,10 +143,10 @@ class SiteSummary:
 
 @dataclass(slots=True)
 class SearchManifest:
-  summary: SiteSummary
-  countries: list[str]
-  chunk_paths: list[str]
-  title_prefix_chunks: dict[str, list[str]]
+    summary: SiteSummary
+    countries: list[str]
+    chunk_paths: list[str]
+    title_prefix_chunks: dict[str, list[str]]
 
 
 @dataclass(slots=True)
@@ -164,8 +167,8 @@ def normalize_text(value: str) -> str:
 
 
 def search_prefix(value: str) -> str:
-  normalized = normalize_text(value)
-  return normalized[0] if normalized else "#"
+    normalized = normalize_text(value)
+    return normalized[0] if normalized else "#"
 
 
 def normalize_issns(raw_value: str) -> list[str]:
@@ -282,16 +285,16 @@ def load_doaj_lookups(path: Path) -> tuple[dict[str, DoajRecord], dict[str, Doaj
 
 
 def match_doaj_record(
-  title: str,
-  issns: list[str],
-  issn_lookup: dict[str, DoajRecord],
-  title_lookup: dict[str, DoajRecord],
+    title: str,
+    issns: list[str],
+    issn_lookup: dict[str, DoajRecord],
+    title_lookup: dict[str, DoajRecord],
 ) -> DoajRecord | None:
-  for issn in issns:
-    match = issn_lookup.get(issn)
-    if match:
-      return match
-  return title_lookup.get(normalize_text(title))
+    for issn in issns:
+        match = issn_lookup.get(issn)
+        if match:
+            return match
+    return title_lookup.get(normalize_text(title))
 
 
 def build_records() -> list[JournalRecord]:
@@ -320,7 +323,7 @@ def build_records() -> list[JournalRecord]:
             publisher=(row.get("Publisher") or "").strip() or None,
             country=(row.get("Country") or "").strip() or None,
             region=(row.get("Region") or "").strip() or None,
-          issns=issns,
+            issns=issns,
             coverage=(row.get("Coverage") or "").strip() or None,
             categories=(row.get("Categories") or "").strip() or None,
             areas=(row.get("Areas") or "").strip() or None,
@@ -328,18 +331,18 @@ def build_records() -> list[JournalRecord]:
             sjr_best_quartile=quartile,
             scopus_indexed=True,
             wos_indexed=sourceid in wos_sourceids,
-          doaj_indexed=doaj_record is not None,
-          journal_url=doaj_record.journal_url if doaj_record else None,
-          apc_status=doaj_record.apc_status if doaj_record else None,
-          license=doaj_record.license if doaj_record else None,
-          author_holds_copyright=doaj_record.author_holds_copyright if doaj_record else None,
+            doaj_indexed=doaj_record is not None,
+            journal_url=doaj_record.journal_url if doaj_record else None,
+            apc_status=doaj_record.apc_status if doaj_record else None,
+            license=doaj_record.license if doaj_record else None,
+            author_holds_copyright=doaj_record.author_holds_copyright if doaj_record else None,
             open_access=(row.get("Open Access") or "").strip() or None,
             open_access_diamond=(row.get("Open Access Diamond") or "").strip() or None,
             slug=slugify(title, sourceid),
             normalized_title=normalize_text(title),
             normalized_publisher=normalize_text((row.get("Publisher") or "")),
             normalized_country=normalize_text((row.get("Country") or "")),
-          normalized_url=normalize_text(doaj_record.journal_url or "") if doaj_record else "",
+            normalized_url=normalize_text(doaj_record.journal_url or "") if doaj_record else "",
         )
         records.append(record)
 
@@ -365,102 +368,160 @@ def reset_output_dirs() -> None:
     if DOCS_DIR.exists():
         shutil.rmtree(DOCS_DIR)
     DOCS_DIR.mkdir(parents=True, exist_ok=True)
-    for relative in ("assets", "data", "journals", "search"):
+    for relative in ("assets", "data", "journal", "search"):
         (DOCS_DIR / relative).mkdir(parents=True, exist_ok=True)
 
 
-def init_database(records: Iterable[JournalRecord]) -> Path:
-    database_path = BUILD_DIR / "journal_discovery.db"
-    if database_path.exists():
-        database_path.unlink()
+def legacy_redirect_page_html() -> str:
+    return """<!doctype html>
+<html lang=\"en\">
+  <head>
+    <meta charset=\"utf-8\">
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+    <title>Legacy Journal Link | Journal Discovery</title>
+    <meta name=\"robots\" content=\"noindex,nofollow\">
+    <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'\">
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f9fc;
+        --paper: #ffffff;
+        --ink: #17313e;
+        --muted: #627381;
+        --line: rgba(23, 49, 62, 0.1);
+        --accent: #1976d2;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+        font-family: Avenir Next, Segoe UI, sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at top left, rgba(25, 118, 210, 0.08), transparent 20%), var(--bg);
+      }
+      .shell { width: min(100%, 760px); }
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+        padding: 1.5rem;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--paper);
+        box-shadow: 0 18px 48px rgba(23, 49, 62, 0.07);
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: fit-content;
+        padding: 0.9rem 1.2rem;
+        border-radius: 999px;
+        background: var(--accent);
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .button-secondary {
+        background: #fff;
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+      strong { font-size: 1.1rem; }
+      span { color: var(--muted); line-height: 1.7; }
+    </style>
+    <script>
+      (function () {
+        function normalizedPathname(pathname) {
+          return (pathname || "").replace(/\\/index\\.html$/i, "").replace(/\\/+$/, "");
+        }
 
-    connection = sqlite3.connect(database_path)
-    try:
-        connection.executescript(
-            """
-            CREATE TABLE journals (
-                sourceid TEXT PRIMARY KEY,
-                rank INTEGER NOT NULL,
-                title TEXT NOT NULL,
-                slug TEXT NOT NULL,
-                publisher TEXT,
-                country TEXT,
-                region TEXT,
-                issns TEXT,
-                coverage TEXT,
-                categories TEXT,
-                areas TEXT,
-                sjr_quartile TEXT,
-                sjr_best_quartile TEXT,
-                scopus_indexed INTEGER NOT NULL,
-                wos_indexed INTEGER NOT NULL,
-                doaj_indexed INTEGER NOT NULL,
-                journal_url TEXT,
-                apc_status TEXT,
-                license TEXT,
-                author_holds_copyright TEXT,
-                open_access TEXT,
-                open_access_diamond TEXT,
-                normalized_title TEXT,
-                normalized_publisher TEXT,
-                normalized_country TEXT,
-                normalized_url TEXT,
-                search_text TEXT NOT NULL
-            );
-            CREATE INDEX idx_journals_rank ON journals(rank);
-            CREATE INDEX idx_journals_title ON journals(normalized_title);
-            CREATE INDEX idx_journals_country ON journals(normalized_country);
-            CREATE INDEX idx_journals_wos ON journals(wos_indexed);
-            """
-        )
-        connection.executemany(
-            """
-            INSERT INTO journals (
-                sourceid, rank, title, slug, publisher, country, region, issns, coverage,
-                categories, areas, sjr_quartile, sjr_best_quartile, scopus_indexed,
-                wos_indexed, doaj_indexed, journal_url, apc_status, license,
-                author_holds_copyright, open_access, open_access_diamond,
-                normalized_title, normalized_publisher, normalized_country,
-                normalized_url, search_text
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            [
-                (
-                    record.sourceid,
-                    record.rank,
-                    record.title,
-                    record.slug,
-                    record.publisher,
-                    record.country,
-                    record.region,
-                    ", ".join(record.issns),
-                    record.coverage,
-                    record.categories,
-                    record.areas,
-                    record.sjr_quartile,
-                    record.sjr_best_quartile,
-                    int(record.scopus_indexed),
-                    int(record.wos_indexed),
-                    int(record.doaj_indexed),
-                    record.journal_url,
-                    record.apc_status,
-                    record.license,
-                    record.author_holds_copyright,
-                    record.open_access,
-                    record.open_access_diamond,
-                    record.normalized_title,
-                    record.normalized_publisher,
-                    record.normalized_country,
-                    record.normalized_url,
-                    record.search_text,
-                )
-                for record in records
-            ],
-        )
-        connection.commit()
-    finally:
-        connection.close()
-    return database_path
+        function inferBasePath(pathname) {
+          const journalsIndex = pathname.indexOf("/journals/");
+          if (journalsIndex >= 0) {
+            return pathname.slice(0, journalsIndex);
+          }
+          if (pathname.endsWith("/404.html")) {
+            return pathname.slice(0, -"/404.html".length);
+          }
+          return "";
+        }
+
+        function extractSourceId(pathname) {
+          const match = normalizedPathname(pathname).match(/\\/journals\\/([^/]+)$/i);
+          if (!match) {
+            return "";
+          }
+          const slugMatch = (match[1] || "").match(/-(\\d+)$/);
+          return slugMatch ? slugMatch[1] : "";
+        }
+
+        function renderFallback(titleText, bodyText, href, linkText, secondary) {
+          const root = document.getElementById("legacy-redirect-root");
+          if (!root) {
+            return;
+          }
+
+          const shell = document.createElement("div");
+          shell.className = "shell";
+
+          const box = document.createElement("div");
+          box.className = "empty-state";
+
+          const title = document.createElement("strong");
+          title.textContent = titleText;
+          box.appendChild(title);
+
+          const body = document.createElement("span");
+          body.textContent = bodyText;
+          box.appendChild(body);
+
+          const link = document.createElement("a");
+          link.className = secondary ? "button button-secondary" : "button";
+          link.href = href;
+          link.textContent = linkText;
+          box.appendChild(link);
+
+          shell.appendChild(box);
+          root.replaceChildren(shell);
+        }
+
+        const pathname = window.location.pathname || "";
+        const basePath = inferBasePath(pathname);
+        const homeHref = (basePath || "") + "/";
+        const sourceid = extractSourceId(pathname);
+
+        if (!sourceid) {
+          renderFallback(
+            "Legacy journal link could not be resolved.",
+            "Open the journal from the current browse or search interface instead.",
+            homeHref,
+            "Back to home",
+            true
+          );
+          return;
+        }
+
+        const targetUrl = (basePath || "") + "/journal/?sourceid=" + encodeURIComponent(sourceid);
+        renderFallback(
+          "Redirecting legacy journal link.",
+          "This journal URL now uses the new runtime profile format.",
+          targetUrl,
+          "Open journal profile",
+          false
+        );
+        window.location.replace(targetUrl);
+      }());
+    </script>
+  </head>
+  <body>
+    <main id=\"legacy-redirect-root\"></main>
+  </body>
+</html>
+"""
 
 
 def copy_assets() -> None:
@@ -503,7 +564,7 @@ def render_index_labels(record: JournalRecord) -> str:
 def render_initial_rows(records: list[JournalRecord]) -> str:
     rows: list[str] = []
     for record in records[:10]:
-        href = record.journal_url or record.profile_path
+        href = record.journal_url or record.runtime_profile_path
         external_attrs = ' target="_blank" rel="noopener noreferrer"' if record.journal_url else ""
         index_labels = ['<span class="label label-scopus">Scopus</span>']
         if record.wos_indexed:
@@ -530,7 +591,7 @@ def render_initial_rows(records: list[JournalRecord]) -> str:
               </td>
               <td><div class=\"status-row\">{''.join(index_labels)}</div></td>
               <td><span class=\"pill pill-quartile\">{html.escape(record.sjr_quartile or '—')}</span></td>
-              <td><a class=\"table-action-link\" href=\"{html.escape(record.profile_path, quote=True)}\" title=\"Open journal profile for {html.escape(record.title, quote=True)}\">View profile</a></td>
+              <td><a class=\"table-action-link\" href=\"{html.escape(record.runtime_profile_path, quote=True)}\" title=\"Open journal profile for {html.escape(record.title, quote=True)}\">View profile</a></td>
             </tr>
             """.strip()
         )
@@ -759,124 +820,45 @@ def search_page_html(summary: SiteSummary) -> str:
 """
 
 
-def profile_page_html(record: JournalRecord) -> str:
-    search_query = quote_plus(record.title)
-    description = f"{record.title} journal profile with indexing labels, publisher, country, ISSN, website availability, APC status, license, and SJR best quartile."
-    website_value = (
-        f'<a href="{html.escape(record.journal_url, quote=True)}" target="_blank" rel="noopener noreferrer">{html.escape(record.journal_url)}</a>'
-        if record.journal_url
-    else f'<span class="field-value-muted">{NOT_AVAILABLE}</span>'
-    )
-    metadata_rows = [
-    ("Publisher", record.publisher or NOT_AVAILABLE),
-    ("Country", record.country or NOT_AVAILABLE),
-    ("Region", record.region or NOT_AVAILABLE),
-        ("Indexed In", record.index_summary),
-    ("Best SJR Quartile", record.sjr_best_quartile or NOT_AVAILABLE),
-    ("Directory Quartile Label", record.sjr_quartile or NOT_AVAILABLE),
-    ("APC Status", record.apc_status or NOT_AVAILABLE),
-    ("License", record.license or NOT_AVAILABLE),
-    ("Author Holds Copyright", record.author_holds_copyright or NOT_AVAILABLE),
-    ("ISSN", ", ".join(record.issns) or NOT_AVAILABLE),
-    ("Coverage", record.coverage or NOT_AVAILABLE),
-    ("Categories", record.categories or NOT_AVAILABLE),
-    ("Areas", record.areas or NOT_AVAILABLE),
-    ("Open Access", record.open_access or NOT_AVAILABLE),
-    ("Open Access Diamond", record.open_access_diamond or NOT_AVAILABLE),
-    ]
-    detail_html = "\n".join(
-        f'<div class="detail-item"><div class="field-name">{html.escape(name)}</div><div class="field-value">{html.escape(value)}</div></div>'
-        for name, value in metadata_rows
-    )
+def profile_page_html() -> str:
     return f"""<!doctype html>
 <html lang=\"en\">
   <head>
     <meta charset=\"utf-8\">
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
-    <title>{html.escape(record.title)} | Journal Discovery</title>
-    <meta name=\"description\" content=\"{html.escape(description, quote=True)}\">
+    <title>Journal Profile | Journal Discovery</title>
+    <meta name=\"description\" content=\"Journal profile with indexing labels, publisher, country, ISSN, website availability, APC status, license, and SJR best quartile.\">
     <meta name=\"robots\" content=\"index,follow\">
-    <meta property=\"og:title\" content=\"{html.escape(record.title, quote=True)}\">
-    <meta property=\"og:description\" content=\"{html.escape(description, quote=True)}\">
+    <meta property=\"og:title\" content=\"Journal Profile\">
+    <meta property=\"og:description\" content=\"Journal profile with indexing labels, publisher, country, ISSN, website availability, APC status, license, and SJR best quartile.\">
     <meta property=\"og:type\" content=\"website\">
-    <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
-    {maybe_canonical(record.profile_path)}
-    <link rel=\"stylesheet\" href=\"../../assets/styles.css\">
+    <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
+    {maybe_canonical('journal/')}
+    <link rel=\"stylesheet\" href=\"../assets/styles.css\">
+    <script defer src=\"../assets/app.js\"></script>
   </head>
-  <body>
+  <body data-page=\"profile\" data-site-root=\"..\" data-data-url=\"../data/profile-index.json\">
     <a class=\"skip-link\" href=\"#main\">Skip to content</a>
     <header class=\"site-header\">
       <div class=\"shell\">
-        <a class=\"brand\" href=\"../../\">
+        <a class=\"brand\" href=\"../\">
           <span class=\"brand-mark\">Journal Discovery</span>
           <span class=\"brand-subtitle\">Journal profile</span>
         </a>
         <nav class=\"top-nav\" aria-label=\"Primary\">
-          <a href=\"../../\">Browse journals</a>
-          <a href=\"../../search/\">Search journal profiles</a>
+          <a href=\"../\">Browse journals</a>
+          <a href=\"../search/\">Search journal profiles</a>
         </nav>
       </div>
     </header>
     <main id=\"main\">
-      <section class=\"profile-hero\">
-        <div class=\"shell\">
-          <div class=\"breadcrumbs\">
-            <a href=\"../../\">Home</a>
-            <span>/</span>
-            <a href=\"../../search/\">Search</a>
-            <span>/</span>
-            <span>{html.escape(record.title)}</span>
-          </div>
-          <div class=\"hero-panel\">
-            <p class=\"eyebrow\">Journal profile</p>
-            <h1>{html.escape(record.title)}</h1>
-            <p class=\"profile-copy\">This page brings together journal details, indexing labels, and access information when available.</p>
-            <div class=\"label-row\">{render_index_labels(record)}</div>
-            <div class=\"profile-links\">
-              <a class=\"button button-secondary\" href=\"../../search/?q={search_query}&scope=title\">Search similar journals</a>
-              <a class=\"button button-primary\" href=\"../../\">Back to home</a>
-            </div>
-          </div>
-        </div>
-      </section>
-      <section class=\"section\">
-        <div class=\"shell\">
-          <div class=\"profile-card\">
-            <div class=\"profile-layout\">
-              <div class=\"profile-main detail-grid\">
-                <div class=\"detail-item\">
-                  <div class=\"field-name\">Website</div>
-                  <div class="field-value">{website_value}</div>
-                </div>
-                {detail_html}
-              </div>
-              <aside class="profile-side detail-grid">
-                <div class=\"detail-item\">
-                  <div class=\"field-name\">Source ID</div>
-                  <div class=\"field-value\">{html.escape(record.sourceid)}</div>
-                </div>
-                <div class=\"detail-item\">
-                  <div class=\"field-name\">Directory Quartile Label</div>
-                  <div class="field-value">{html.escape(record.sjr_quartile or NOT_AVAILABLE)}</div>
-                </div>
-                <div class=\"detail-item\">
-                  <div class=\"field-name\">Best SJR Quartile</div>
-                  <div class="field-value">{html.escape(record.sjr_best_quartile or NOT_AVAILABLE)}</div>
-                </div>
-                <div class=\"detail-item\">
-                  <div class=\"field-name\">Data note</div>
-                  <div class=\"field-value\">Website, APC, license, and copyright details are shown when available.</div>
-                </div>
-              </aside>
-            </div>
-          </div>
-        </div>
-      </section>
+      <div id=\"app-error\" class=\"shell\"></div>
+      <div id=\"profile-root\"></div>
     </main>
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
         <div class=\"footer-note\">Journal profile</div>
-        <div class=\"footer-note\">Source ID {html.escape(record.sourceid)} · Rank {record.rank}</div>
+        <div class=\"footer-note\" id=\"profile-footer-meta\">Load a journal profile to view source and rank details.</div>
       </div>
     </footer>
   </body>
@@ -885,89 +867,122 @@ def profile_page_html(record: JournalRecord) -> str:
 
 
 def write_data_json(records: list[JournalRecord], summary: SiteSummary) -> None:
-  home_payload = {
-    "summary": asdict(summary),
-    "records": [record.to_home_dict() for record in records],
-  }
-  (DOCS_DIR / "data" / "home.json").write_text(
-    json.dumps(home_payload, ensure_ascii=False, separators=(",", ":")),
-    encoding="utf-8",
-  )
-
-  chunk_dir = DOCS_DIR / "data" / "search-chunks"
-  chunk_dir.mkdir(parents=True, exist_ok=True)
-  chunk_paths: list[str] = []
-  title_prefix_chunks: dict[str, list[str]] = {}
-  search_records = [record.to_search_dict() for record in sorted(
-    records,
-    key=lambda record: (record.normalized_title, record.rank, record.title),
-  )]
-  for index in range(0, len(search_records), SEARCH_CHUNK_SIZE):
-    chunk_name = f"search-{(index // SEARCH_CHUNK_SIZE) + 1:03d}.json"
-    chunk_path = chunk_dir / chunk_name
-    chunk_records = search_records[index:index + SEARCH_CHUNK_SIZE]
-    chunk_payload = {"records": chunk_records}
-    chunk_path.write_text(
-      json.dumps(chunk_payload, ensure_ascii=False, separators=(",", ":")),
-      encoding="utf-8",
+    home_payload = {
+        "summary": asdict(summary),
+        "records": [record.to_home_dict() for record in records],
+    }
+    (DOCS_DIR / "data" / "home.json").write_text(
+        json.dumps(home_payload, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
     )
-    chunk_relative_path = f"data/search-chunks/{chunk_name}"
-    chunk_paths.append(chunk_relative_path)
-    for prefix in sorted({search_prefix(record.get("title", "")) for record in chunk_records}):
-      title_prefix_chunks.setdefault(prefix, []).append(chunk_relative_path)
 
-  countries = sorted({record.country for record in records if record.country})
-  manifest = SearchManifest(
-    summary=summary,
-    countries=countries,
-    chunk_paths=chunk_paths,
-    title_prefix_chunks=title_prefix_chunks,
-  )
-  (DOCS_DIR / "data" / "search-manifest.json").write_text(
-    json.dumps(
-      {
-        "summary": asdict(manifest.summary),
-        "countries": manifest.countries,
-        "chunk_paths": manifest.chunk_paths,
-        "title_prefix_chunks": manifest.title_prefix_chunks,
-      },
-      ensure_ascii=False,
-      separators=(",", ":"),
-    ),
-    encoding="utf-8",
-  )
+    chunk_dir = DOCS_DIR / "data" / "search-chunks"
+    chunk_dir.mkdir(parents=True, exist_ok=True)
+    chunk_paths: list[str] = []
+    profile_index: dict[str, str] = {}
+    title_prefix_chunks: dict[str, list[str]] = {}
+    search_records = [record.to_search_dict() for record in sorted(
+        records,
+        key=lambda record: (record.normalized_title, record.rank, record.title),
+    )]
+    for index in range(0, len(search_records), SEARCH_CHUNK_SIZE):
+        chunk_name = f"search-{(index // SEARCH_CHUNK_SIZE) + 1:03d}.json"
+        chunk_path = chunk_dir / chunk_name
+        chunk_records = search_records[index:index + SEARCH_CHUNK_SIZE]
+        chunk_payload = {"records": chunk_records}
+        chunk_path.write_text(
+            json.dumps(chunk_payload, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        chunk_relative_path = f"data/search-chunks/{chunk_name}"
+        chunk_paths.append(chunk_relative_path)
+        for chunk_record in chunk_records:
+            sourceid = str(chunk_record.get("sourceid") or "")
+            if sourceid:
+                profile_index[sourceid] = chunk_relative_path
+        for prefix in sorted({search_prefix(record.get("title", "")) for record in chunk_records}):
+            title_prefix_chunks.setdefault(prefix, []).append(chunk_relative_path)
+
+    countries = sorted({record.country for record in records if record.country})
+    manifest = SearchManifest(
+        summary=summary,
+        countries=countries,
+        chunk_paths=chunk_paths,
+        title_prefix_chunks=title_prefix_chunks,
+    )
+    (DOCS_DIR / "data" / "search-manifest.json").write_text(
+        json.dumps(
+            {
+                "summary": asdict(manifest.summary),
+                "countries": manifest.countries,
+                "chunk_paths": manifest.chunk_paths,
+                "title_prefix_chunks": manifest.title_prefix_chunks,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
+    (DOCS_DIR / "data" / "profile-index.json").write_text(
+        json.dumps(
+            {
+                "summary": asdict(summary),
+                "sourceid_to_chunk": profile_index,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ),
+        encoding="utf-8",
+    )
 
 
 def write_pages(records: list[JournalRecord], summary: SiteSummary) -> None:
-    (DOCS_DIR / "index.html").write_text(home_page_html(records, summary), encoding="utf-8")
-    (DOCS_DIR / "search" / "index.html").write_text(search_page_html(summary), encoding="utf-8")
-    journal_root = DOCS_DIR / "journals"
-    for record in records:
-        target_dir = journal_root / record.slug
-        target_dir.mkdir(parents=True, exist_ok=True)
-        (target_dir / "index.html").write_text(profile_page_html(record), encoding="utf-8")
+    (DOCS_DIR / "index.html").write_text(
+        home_page_html(records, summary),
+        encoding="utf-8",
+    )
+    (DOCS_DIR / "search" / "index.html").write_text(
+        search_page_html(summary),
+        encoding="utf-8",
+    )
+    (DOCS_DIR / "journal" / "index.html").write_text(
+        profile_page_html(),
+        encoding="utf-8",
+    )
+    (DOCS_DIR / "404.html").write_text(
+        legacy_redirect_page_html(),
+        encoding="utf-8",
+    )
 
 
 def write_sitemap(records: list[JournalRecord]) -> None:
     if not DEFAULT_SITE_URL:
         return
+
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
         f"  <url><loc>{html.escape(DEFAULT_SITE_URL + '/')}</loc></url>",
         f"  <url><loc>{html.escape(DEFAULT_SITE_URL + '/search/')}</loc></url>",
+        f"  <url><loc>{html.escape(DEFAULT_SITE_URL + '/journal/')}</loc></url>",
     ]
+
     for record in records:
-        lines.append(f"  <url><loc>{html.escape(DEFAULT_SITE_URL + '/' + record.profile_path)}</loc></url>")
+        lines.append(
+            f"  <url><loc>{html.escape(DEFAULT_SITE_URL + '/journal/?sourceid=' + quote_plus(record.sourceid))}</loc></url>"
+        )
+
     lines.append("</urlset>")
-    (DOCS_DIR / "sitemap.xml").write_text("\n".join(lines), encoding="utf-8")
+    (DOCS_DIR / "sitemap.xml").write_text(
+        "\n".join(lines),
+        encoding="utf-8",
+    )
 
 
 def build_site() -> None:
     records = build_records()
     summary = build_summary(records)
     reset_output_dirs()
-    database_path = init_database(records)
     copy_assets()
     write_data_json(records, summary)
     write_pages(records, summary)
@@ -979,7 +994,6 @@ def build_site() -> None:
                 "wos": summary.total_wos,
                 "doaj": summary.total_doaj,
                 "quartile_ready": summary.total_with_quartile,
-                "database": str(database_path),
                 "docs": str(DOCS_DIR),
             },
             ensure_ascii=False,

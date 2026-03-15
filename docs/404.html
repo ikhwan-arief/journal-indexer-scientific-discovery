@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Legacy Journal Link | Journal Discovery</title>
+    <meta name="robots" content="noindex,nofollow">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f9fc;
+        --paper: #ffffff;
+        --ink: #17313e;
+        --muted: #627381;
+        --line: rgba(23, 49, 62, 0.1);
+        --accent: #1976d2;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 1.5rem;
+        font-family: Avenir Next, Segoe UI, sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at top left, rgba(25, 118, 210, 0.08), transparent 20%), var(--bg);
+      }
+      .shell { width: min(100%, 760px); }
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+        padding: 1.5rem;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--paper);
+        box-shadow: 0 18px 48px rgba(23, 49, 62, 0.07);
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: fit-content;
+        padding: 0.9rem 1.2rem;
+        border-radius: 999px;
+        background: var(--accent);
+        color: #fff;
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .button-secondary {
+        background: #fff;
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+      strong { font-size: 1.1rem; }
+      span { color: var(--muted); line-height: 1.7; }
+    </style>
+    <script>
+      (function () {
+        function normalizedPathname(pathname) {
+          return (pathname || "").replace(/\/index\.html$/i, "").replace(/\/+$/, "");
+        }
+
+        function inferBasePath(pathname) {
+          const journalsIndex = pathname.indexOf("/journals/");
+          if (journalsIndex >= 0) {
+            return pathname.slice(0, journalsIndex);
+          }
+          if (pathname.endsWith("/404.html")) {
+            return pathname.slice(0, -"/404.html".length);
+          }
+          return "";
+        }
+
+        function extractSourceId(pathname) {
+          const match = normalizedPathname(pathname).match(/\/journals\/([^/]+)$/i);
+          if (!match) {
+            return "";
+          }
+          const slugMatch = (match[1] || "").match(/-(\d+)$/);
+          return slugMatch ? slugMatch[1] : "";
+        }
+
+        function renderFallback(titleText, bodyText, href, linkText, secondary) {
+          const root = document.getElementById("legacy-redirect-root");
+          if (!root) {
+            return;
+          }
+
+          const shell = document.createElement("div");
+          shell.className = "shell";
+
+          const box = document.createElement("div");
+          box.className = "empty-state";
+
+          const title = document.createElement("strong");
+          title.textContent = titleText;
+          box.appendChild(title);
+
+          const body = document.createElement("span");
+          body.textContent = bodyText;
+          box.appendChild(body);
+
+          const link = document.createElement("a");
+          link.className = secondary ? "button button-secondary" : "button";
+          link.href = href;
+          link.textContent = linkText;
+          box.appendChild(link);
+
+          shell.appendChild(box);
+          root.replaceChildren(shell);
+        }
+
+        const pathname = window.location.pathname || "";
+        const basePath = inferBasePath(pathname);
+        const homeHref = (basePath || "") + "/";
+        const sourceid = extractSourceId(pathname);
+
+        if (!sourceid) {
+          renderFallback(
+            "Legacy journal link could not be resolved.",
+            "Open the journal from the current browse or search interface instead.",
+            homeHref,
+            "Back to home",
+            true
+          );
+          return;
+        }
+
+        const targetUrl = (basePath || "") + "/journal/?sourceid=" + encodeURIComponent(sourceid);
+        renderFallback(
+          "Redirecting legacy journal link.",
+          "This journal URL now uses the new runtime profile format.",
+          targetUrl,
+          "Open journal profile",
+          false
+        );
+        window.location.replace(targetUrl);
+      }());
+    </script>
+  </head>
+  <body>
+    <main id="legacy-redirect-root"></main>
+  </body>
+</html>

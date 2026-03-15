@@ -5,7 +5,6 @@ on:
     branches:
       - main
   pull_request:
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -37,16 +36,10 @@ jobs:
           mkdir -p data/raw
           curl -L --retry 3 --fail https://doaj.org/csv -o "data/raw/doaj.csv" || echo "DOAJ download skipped; build will continue without enrichment."
 
-      - name: Build static site
+      - name: Run guarded dataset refresh workflow
         env:
           SITE_URL: ${{ vars.SITE_URL }}
-        run: python scripts/build_site.py
-
-      - name: Validate generated data
-        run: python scripts/validate_generated_data.py
-
-      - name: Run browser smoke test
-        run: python scripts/smoke_test_search_loading.py
+        run: python scripts/update_source_data.py --scimago data/raw/scimagojr.csv --wos data/raw/scimagojr_wos.csv --doaj data/raw/doaj.csv
 
       - name: Upload artifact
         if: github.event_name != 'pull_request'

@@ -9,7 +9,7 @@ import time
 from functools import partial
 from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 try:
     from playwright.sync_api import sync_playwright
@@ -29,6 +29,22 @@ MANIFEST_PATH = DOCS_DIR / "data" / "search-manifest.json"
 class QuietRequestHandler(SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:
         return
+
+    def send_head(self):
+        requested_path = Path(self.translate_path(self.path))
+        if requested_path.exists():
+            return super().send_head()
+
+        fallback = Path(self.directory or DOCS_DIR) / "404.html"
+        if fallback.exists():
+            handle = fallback.open("rb")
+            self.send_response(404)
+            self.send_header("Content-type", self.guess_type(str(fallback)))
+            self.send_header("Content-Length", str(fallback.stat().st_size))
+            self.end_headers()
+            return handle
+
+        return super().send_head()
 
 
 class ReusableTCPServer(socketserver.TCPServer):
@@ -85,11 +101,20 @@ def main() -> int:
         raise SystemExit("Build output is missing. Run scripts/build_site.py first.")
 
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    first_chunk_path = DOCS_DIR / str((manifest.get("chunk_paths") or [""])[0])
+    if not first_chunk_path.exists():
+        raise SystemExit("Manifest does not contain a readable first chunk for legacy redirect testing.")
+    first_chunk = json.loads(first_chunk_path.read_text(encoding="utf-8"))
+    first_record = (first_chunk.get("records") or [{}])[0]
+    legacy_slug = str(first_record.get("slug") or "")
+    legacy_sourceid = str(first_record.get("sourceid") or "")
+    legacy_title = str(first_record.get("title") or "")
+
     expected_all = set(manifest.get("chunk_paths", []))
     prefix_paths = manifest.get("title_prefix_chunks", {})
     expected_a = set(prefix_paths.get("a", []))
     expected_j = set(prefix_paths.get("j", []))
-    if not expected_all or not expected_a or not expected_j:
+    if not expected_all or not expected_a or not expected_j or not legacy_slug or not legacy_sourceid:
         raise SystemExit("Manifest does not contain the expected title-prefix shard mappings.")
 
     with static_server(DOCS_DIR) as base_url, sync_playwright() as playwright:
@@ -168,10 +193,30 @@ def main() -> int:
         if not first_title.strip():
             raise AssertionError("Expected abstract search to render at least one result title.")
 
+        profile_href = filter_page.locator(".search-card h3 a").first.get_attribute("href")
+        if not profile_href or "journal/?sourceid=" not in profile_href:
+            raise AssertionError(f"Expected dynamic journal profile link, got: {profile_href}")
+
+        profile_page = browser.new_page()
+        profile_page.goto(urljoin(f"{base_url}/search/", profile_href), wait_until="networkidle")
+        profile_page.wait_for_selector("h1", timeout=20000)
+        profile_heading = profile_page.locator("h1").inner_text()
+        if not profile_heading.strip() or profile_heading == "Journal Profile":
+            raise AssertionError(f"Expected resolved journal profile title, got: {profile_heading}")
+
+        legacy_page = browser.new_page()
+        legacy_page.goto(f"{base_url}/journals/{legacy_slug}/", wait_until="networkidle")
+        legacy_page.wait_for_url(f"**/journal/?sourceid={legacy_sourceid}", timeout=20000)
+        legacy_heading = legacy_page.locator("h1").inner_text()
+        if legacy_heading.strip() != legacy_title:
+            raise AssertionError(
+                f"Expected legacy journal URL to redirect to {legacy_title}, got: {legacy_heading}"
+            )
+
         browser.close()
 
     print(
-        "Smoke test passed: idle search stayed idle, scope-only changes avoided shard loads, title searches fetched only the expected shards, deep-linked filters loaded the full dataset, and abstract matching rendered insight UI."
+        "Smoke test passed: idle search stayed idle, scope-only changes avoided shard loads, title searches fetched only the expected shards, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
     )
     print(f"Prefix 'a' shards: {sorted(expected_a)}")
     print(f"Prefix 'j' shards: {sorted(expected_j)}")
