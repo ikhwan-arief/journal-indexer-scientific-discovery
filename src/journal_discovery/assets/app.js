@@ -30,7 +30,7 @@ function joinRelative(siteRoot, relativePath) {
   return `${siteRoot}/${relativePath}`;
 }
 
-function safeText(value, fallback = "Tidak tersedia") {
+function safeText(value, fallback = "Not available") {
   if (value === null || value === undefined || value === "") {
     return fallback;
   }

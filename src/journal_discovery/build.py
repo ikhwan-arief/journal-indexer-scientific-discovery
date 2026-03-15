@@ -24,6 +24,7 @@ MAIN_CSV = RAW_DIR / "scimagojr 2024.csv"
 WOS_CSV = RAW_DIR / "scimagojr 2024_WoS.csv"
 DOAJ_CSV = RAW_DIR / "doaj.csv"
 DEFAULT_SITE_URL = os.getenv("SITE_URL", "").rstrip("/")
+NOT_AVAILABLE = "Not available"
 
 
 @dataclass(slots=True)
@@ -61,14 +62,14 @@ class JournalRecord:
 
     @property
     def index_summary(self) -> str:
-        labels: list[str] = []
-        if self.scopus_indexed:
-            labels.append("Scopus")
-        if self.wos_indexed:
-            labels.append("WoS")
-        if self.doaj_indexed:
-            labels.append("DOAJ")
-        return ", ".join(labels) if labels else "Tidak tersedia"
+      labels: list[str] = []
+      if self.scopus_indexed:
+        labels.append("Scopus")
+      if self.wos_indexed:
+        labels.append("WoS")
+      if self.doaj_indexed:
+        labels.append("DOAJ")
+      return ", ".join(labels) if labels else NOT_AVAILABLE
 
     @property
     def search_text(self) -> str:
@@ -784,24 +785,24 @@ def profile_page_html(record: JournalRecord) -> str:
     website_value = (
         f'<a href="{html.escape(record.journal_url, quote=True)}" target="_blank" rel="noopener noreferrer">{html.escape(record.journal_url)}</a>'
         if record.journal_url
-        else '<span class="field-value-muted">Tidak tersedia</span>'
+    else f'<span class="field-value-muted">{NOT_AVAILABLE}</span>'
     )
     metadata_rows = [
-        ("Publisher", record.publisher or "Tidak tersedia"),
-        ("Country", record.country or "Tidak tersedia"),
-        ("Region", record.region or "Tidak tersedia"),
+    ("Publisher", record.publisher or NOT_AVAILABLE),
+    ("Country", record.country or NOT_AVAILABLE),
+    ("Region", record.region or NOT_AVAILABLE),
         ("Indexed In", record.index_summary),
-        ("SJR Best Quartile", record.sjr_best_quartile or "Tidak tersedia"),
-        ("SJR Quartile (table view)", record.sjr_quartile or "Tidak tersedia"),
-        ("APC Status", record.apc_status or "Tidak tersedia"),
-        ("License", record.license or "Tidak tersedia"),
-        ("Author Holds Copyright", record.author_holds_copyright or "Tidak tersedia"),
-        ("ISSN", ", ".join(record.issns) or "Tidak tersedia"),
-        ("Coverage", record.coverage or "Tidak tersedia"),
-        ("Categories", record.categories or "Tidak tersedia"),
-        ("Areas", record.areas or "Tidak tersedia"),
-        ("Open Access", record.open_access or "Tidak tersedia"),
-        ("Open Access Diamond", record.open_access_diamond or "Tidak tersedia"),
+    ("SJR Best Quartile", record.sjr_best_quartile or NOT_AVAILABLE),
+    ("SJR Quartile (table view)", record.sjr_quartile or NOT_AVAILABLE),
+    ("APC Status", record.apc_status or NOT_AVAILABLE),
+    ("License", record.license or NOT_AVAILABLE),
+    ("Author Holds Copyright", record.author_holds_copyright or NOT_AVAILABLE),
+    ("ISSN", ", ".join(record.issns) or NOT_AVAILABLE),
+    ("Coverage", record.coverage or NOT_AVAILABLE),
+    ("Categories", record.categories or NOT_AVAILABLE),
+    ("Areas", record.areas or NOT_AVAILABLE),
+    ("Open Access", record.open_access or NOT_AVAILABLE),
+    ("Open Access Diamond", record.open_access_diamond or NOT_AVAILABLE),
     ]
     detail_html = "\n".join(
         f'<div class="detail-item"><div class="field-name">{html.escape(name)}</div><div class="field-value">{html.escape(value)}</div></div>'
@@ -865,22 +866,22 @@ def profile_page_html(record: JournalRecord) -> str:
               <div class=\"profile-main detail-grid\">
                 <div class=\"detail-item\">
                   <div class=\"field-name\">Website</div>
-                  <div class=\"field-value\">{website_value}</div>
+                  <div class="field-value">{website_value}</div>
                 </div>
                 {detail_html}
               </div>
-              <aside class=\"profile-side detail-grid\">
+              <aside class="profile-side detail-grid">
                 <div class=\"detail-item\">
                   <div class=\"field-name\">Source ID</div>
                   <div class=\"field-value\">{html.escape(record.sourceid)}</div>
                 </div>
                 <div class=\"detail-item\">
                   <div class=\"field-name\">Front-page quartile column</div>
-                  <div class=\"field-value\">{html.escape(record.sjr_quartile or 'Tidak tersedia')}</div>
+                  <div class="field-value">{html.escape(record.sjr_quartile or NOT_AVAILABLE)}</div>
                 </div>
                 <div class=\"detail-item\">
                   <div class=\"field-name\">Best quartile shown on profile</div>
-                  <div class=\"field-value\">{html.escape(record.sjr_best_quartile or 'Tidak tersedia')}</div>
+                  <div class="field-value">{html.escape(record.sjr_best_quartile or NOT_AVAILABLE)}</div>
                 </div>
                 <div class=\"detail-item\">
                   <div class=\"field-name\">Data note</div>
