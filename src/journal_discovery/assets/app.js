@@ -40,6 +40,29 @@ function withVersion(relativePath, versionTag) {
   return `${relativePath}${separator}v=${encodeURIComponent(versionTag)}`;
 }
 
+function blurPaginationFocus() {
+  const activeElement = document.activeElement;
+  if (!(activeElement instanceof HTMLElement)) {
+    return;
+  }
+  if (activeElement.tagName === "BUTTON" || activeElement.closest(".pagination-list")) {
+    activeElement.blur();
+  }
+}
+
+function scrollElementToViewportTop(element) {
+  if (!element) {
+    return;
+  }
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const scrollToTarget = (behavior) => {
+    const top = Math.max(0, window.scrollY + element.getBoundingClientRect().top);
+    window.scrollTo({ top, behavior });
+  };
+  scrollToTarget(prefersReducedMotion ? "auto" : "smooth");
+  window.setTimeout(() => scrollToTarget("auto"), prefersReducedMotion ? 0 : 220);
+}
+
 function safeText(value, fallback = "Not available") {
   if (value === null || value === undefined || value === "") {
     return fallback;
@@ -148,12 +171,8 @@ function renderHomePage(records, siteRoot) {
   }
 
   function scrollHomeTableToTop() {
-    const scrollTarget = table || tbody;
-    if (!scrollTarget) {
-      return;
-    }
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    scrollTarget.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+    blurPaginationFocus();
+    scrollElementToViewportTop(table || tbody);
   }
 
   function goToPage(nextPage, shouldScroll = false) {
@@ -864,12 +883,8 @@ function renderSearchPage(manifest, siteRoot) {
   }
 
   function scrollResultsToTop() {
-    const scrollTarget = results.firstElementChild || results;
-    if (!scrollTarget) {
-      return;
-    }
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    scrollTarget.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+    blurPaginationFocus();
+    scrollElementToViewportTop(results.firstElementChild || results);
   }
 
   function resetPaginationUi() {
