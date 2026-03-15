@@ -543,7 +543,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
       <div class=\"shell\">
         <a class=\"brand\" href=\"./\">
           <span class=\"brand-mark\">Journal Discovery</span>
-          <span class=\"brand-subtitle\">Static public journal explorer built for GitHub Pages</span>
+          <span class=\"brand-subtitle\">Journal explorer based on abstract and keyword search</span>
         </a>
         <nav class=\"top-nav\" aria-label=\"Primary\">
           <a href=\"./\">Browse journals</a>
@@ -555,9 +555,8 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
       <section class=\"hero\">
         <div class=\"shell\">
           <div class=\"hero-panel\">
-            <p class=\"eyebrow\">Scimago JR 2024 · WoS subset · Optional DOAJ enrichment</p>
             <h1>Find journals by title, keyword, URL fragment, or article abstract.</h1>
-            <p class=\"hero-copy\">Paste an article abstract below and the public app will rank journals by how closely the abstract aligns with the journal <strong>Categories</strong> and <strong>Areas</strong> from Scimago JR 2024. Python and SQLite are still used only during the build pipeline.</p>
+              <p class=\"hero-copy\">Paste an article abstract below and the app will rank journals by how closely the abstract aligns with the journal <strong>Categories</strong> and <strong>Areas</strong>.</p>
             <form class=\"abstract-search-form\" action=\"search/\" method=\"get\">
               <input type=\"hidden\" name=\"scope\" value=\"abstract\">
               <label class=\"field abstract-field\" for=\"abstract-query\">
@@ -572,28 +571,6 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
             <div class=\"hero-actions\">
               <a class=\"button button-primary\" href=\"search/\">Open search experience</a>
               <a class=\"button button-secondary\" href=\"#journal-table\">Browse all journals</a>
-            </div>
-            <div class=\"stats-grid\">
-              <div class=\"stat-card\">
-                <p class=\"stat-label\">Total journals</p>
-                <p class=\"stat-value\">{summary.total_journals:,}</p>
-              </div>
-              <div class=\"stat-card\">
-                <p class=\"stat-label\">Scopus-labelled</p>
-                <p class=\"stat-value\">{summary.total_scopus:,}</p>
-              </div>
-              <div class=\"stat-card\">
-                <p class=\"stat-label\">WoS-labelled</p>
-                <p class=\"stat-value\">{summary.total_wos:,}</p>
-              </div>
-              <div class=\"stat-card\">
-                <p class=\"stat-label\">DOAJ-enriched</p>
-                <p class=\"stat-value\">{summary.total_doaj:,}</p>
-              </div>
-              <div class=\"stat-card\">
-                <p class=\"stat-label\">SJR quartile available</p>
-                <p class=\"stat-value\">{summary.total_with_quartile:,}</p>
-              </div>
             </div>
           </div>
         </div>
@@ -711,45 +688,47 @@ def search_page_html(summary: SiteSummary) -> str:
         <div class=\"shell\">
           <div class=\"filter-panel\">
             <form id=\"search-form\">
-              <div class=\"filter-grid\">
-                <div class=\"field\">
+              <div class=\"search-form-grid\">
+                <div class=\"field search-query-field\">
                   <label for=\"q\">Query</label>
                   <textarea id=\"q\" name=\"q\" rows=\"7\" placeholder=\"Paste an article abstract, or enter a title, keyword, publisher name, or URL fragment.\"></textarea>
                 </div>
-                <div class=\"field\">
-                  <label for=\"scope\">Search scope</label>
-                  <select id=\"scope\" name=\"scope\">
-                    <option value=\"all\">Keyword, title, publisher, country, URL</option>
-                    <option value=\"abstract\">Article abstract to journal topic fit</option>
-                    <option value=\"title\">Title only</option>
-                    <option value=\"publisher\">Publisher only</option>
-                    <option value=\"url\">URL only</option>
-                  </select>
-                </div>
-                <div class=\"field\">
-                  <label for=\"index-filter\">Index filter</label>
-                  <select id=\"index-filter\" name=\"index\">
-                    <option value=\"all\">All indices</option>
-                    <option value=\"scopus\">Scopus only</option>
-                    <option value=\"wos\">WoS only</option>
-                    <option value=\"doaj\">DOAJ only</option>
-                  </select>
-                </div>
-                <div class=\"field\">
-                  <label for=\"quartile-filter\">Best quartile</label>
-                  <select id=\"quartile-filter\" name=\"quartile\">
-                    <option value=\"all\">All quartiles</option>
-                    <option value=\"Q1\">Q1</option>
-                    <option value=\"Q2\">Q2</option>
-                    <option value=\"Q3\">Q3</option>
-                    <option value=\"Q4\">Q4</option>
-                  </select>
-                </div>
-                <div class=\"field\">
-                  <label for=\"country-filter\">Country</label>
-                  <select id=\"country-filter\" name=\"country\">
-                    <option value=\"all\">All countries</option>
-                  </select>
+                <div class=\"search-filter-grid\">
+                  <div class=\"field\">
+                    <label for=\"scope\">Search scope</label>
+                    <select id=\"scope\" name=\"scope\">
+                      <option value=\"all\">Keyword, title, publisher, country, URL</option>
+                      <option value=\"abstract\">Article abstract to journal topic fit</option>
+                      <option value=\"title\">Title only</option>
+                      <option value=\"publisher\">Publisher only</option>
+                      <option value=\"url\">URL only</option>
+                    </select>
+                  </div>
+                  <div class=\"field\">
+                    <label for=\"index-filter\">Index filter</label>
+                    <select id=\"index-filter\" name=\"index\">
+                      <option value=\"all\">All indices</option>
+                      <option value=\"scopus\">Scopus only</option>
+                      <option value=\"wos\">WoS only</option>
+                      <option value=\"doaj\">DOAJ only</option>
+                    </select>
+                  </div>
+                  <div class=\"field\">
+                    <label for=\"quartile-filter\">Best quartile</label>
+                    <select id=\"quartile-filter\" name=\"quartile\">
+                      <option value=\"all\">All quartiles</option>
+                      <option value=\"Q1\">Q1</option>
+                      <option value=\"Q2\">Q2</option>
+                      <option value=\"Q3\">Q3</option>
+                      <option value=\"Q4\">Q4</option>
+                    </select>
+                  </div>
+                  <div class=\"field\">
+                    <label for=\"country-filter\">Country</label>
+                    <select id=\"country-filter\" name=\"country\">
+                      <option value=\"all\">All countries</option>
+                    </select>
+                  </div>
                 </div>
               </div>
               <div class=\"hero-actions\">

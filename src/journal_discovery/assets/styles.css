@@ -485,8 +485,20 @@ tbody tr:hover {
   margin-bottom: 1rem;
 }
 
+.search-form-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .filter-grid {
   flex-wrap: wrap;
+}
+
+.search-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 1rem;
 }
 
 .field {
@@ -494,6 +506,10 @@ tbody tr:hover {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+}
+
+.search-query-field {
+  width: 100%;
 }
 
 .field label {
@@ -517,6 +533,11 @@ tbody tr:hover {
   min-height: 9rem;
   resize: vertical;
   line-height: 1.7;
+}
+
+.search-query-field textarea {
+  min-height: 12rem;
+  line-height: 1.75;
 }
 
 .abstract-field textarea {
@@ -682,5 +703,9 @@ tbody tr:hover {
   .search-card,
   .profile-card {
     border-radius: 18px;
+  }
+
+  .search-filter-grid {
+    grid-template-columns: 1fr;
   }
 }
