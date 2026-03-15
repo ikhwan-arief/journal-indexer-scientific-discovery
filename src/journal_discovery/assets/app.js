@@ -90,6 +90,7 @@ function createHomeActionLink(record, siteRoot) {
   link.className = "table-action-link";
   link.href = joinRelative(siteRoot, record.profile_path);
   link.textContent = "View profile";
+  link.title = `Open journal profile for ${record.title}`;
   return link;
 }
 
@@ -151,10 +152,6 @@ function renderHomePage(records, siteRoot) {
       const titleWrap = document.createElement("div");
       titleWrap.className = "table-title";
       titleWrap.appendChild(createTitleLink(record, siteRoot));
-      const meta = document.createElement("div");
-      meta.className = "mini-meta";
-      meta.textContent = `Rank ${safeText(record.rank, "-")} · Source ID ${safeText(record.sourceid, "-")}`;
-      titleWrap.appendChild(meta);
       titleCell.appendChild(titleWrap);
       row.appendChild(titleCell);
 
@@ -162,9 +159,11 @@ function renderHomePage(records, siteRoot) {
       const publisherWrap = document.createElement("div");
       publisherWrap.className = "table-publisher";
       publisherWrap.textContent = safeText(record.publisher, "Not available");
+      publisherWrap.title = publisherWrap.textContent;
       const publisherMeta = document.createElement("div");
       publisherMeta.className = "mini-meta";
       publisherMeta.textContent = safeText(record.country, "Country not available");
+      publisherMeta.title = publisherMeta.textContent;
       publisherCell.appendChild(publisherWrap);
       publisherCell.appendChild(publisherMeta);
       row.appendChild(publisherCell);
@@ -175,9 +174,11 @@ function renderHomePage(records, siteRoot) {
       const topicPrimary = document.createElement("div");
       topicPrimary.className = "topic-primary";
       topicPrimary.textContent = safeText(record.areas, "Area not available");
+      topicPrimary.title = topicPrimary.textContent;
       const topicSecondary = document.createElement("div");
       topicSecondary.className = "topic-secondary";
       topicSecondary.textContent = safeText(record.categories, "Categories not available");
+      topicSecondary.title = topicSecondary.textContent;
       topicWrap.appendChild(topicPrimary);
       topicWrap.appendChild(topicSecondary);
       topicCell.appendChild(topicWrap);
@@ -202,19 +203,19 @@ function renderHomePage(records, siteRoot) {
     }
 
     if (paginationInfo) {
-      paginationInfo.textContent = `Page ${page} of ${totalPages}`;
+      paginationInfo.textContent = `Page ${page} of ${totalPages} · 10 journals per page`;
     }
 
     if (paginationList) {
       paginationList.replaceChildren();
       const buttons = [];
-      buttons.push({ label: "Prev", page: page - 1, disabled: page === 1 });
+      buttons.push({ label: "‹ Prev", page: page - 1, disabled: page === 1 });
       const startPage = Math.max(1, page - 2);
       const endPage = Math.min(totalPages, startPage + 4);
       for (let index = startPage; index <= endPage; index += 1) {
         buttons.push({ label: String(index), page: index, current: index === page });
       }
-      buttons.push({ label: "Next", page: page + 1, disabled: page === totalPages });
+      buttons.push({ label: "Next ›", page: page + 1, disabled: page === totalPages });
 
       for (const item of buttons) {
         const button = document.createElement("button");

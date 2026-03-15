@@ -515,22 +515,21 @@ def render_initial_rows(records: list[JournalRecord]) -> str:
               <td>
                 <div class=\"table-title\">
                   <a href=\"{html.escape(href, quote=True)}\"{external_attrs}>{html.escape(record.title)}</a>
-                  <div class=\"mini-meta\">Rank {record.rank} · Source ID {html.escape(record.sourceid)}</div>
                 </div>
               </td>
               <td>
-                <div class=\"table-publisher\">{html.escape(record.publisher or 'Not available')}</div>
-                <div class=\"mini-meta\">{html.escape(record.country or 'Country not available')}</div>
+                <div class=\"table-publisher\" title=\"{html.escape(record.publisher or 'Not available', quote=True)}\">{html.escape(record.publisher or 'Not available')}</div>
+                <div class=\"mini-meta\" title=\"{html.escape(record.country or 'Country not available', quote=True)}\">{html.escape(record.country or 'Country not available')}</div>
               </td>
               <td>
                 <div class=\"topic-stack\">
-                  <div class=\"topic-primary\">{html.escape(record.areas or 'Area not available')}</div>
-                  <div class=\"topic-secondary\">{html.escape(record.categories or 'Categories not available')}</div>
+                  <div class=\"topic-primary\" title=\"{html.escape(record.areas or 'Area not available', quote=True)}\">{html.escape(record.areas or 'Area not available')}</div>
+                  <div class=\"topic-secondary\" title=\"{html.escape(record.categories or 'Categories not available', quote=True)}\">{html.escape(record.categories or 'Categories not available')}</div>
                 </div>
               </td>
               <td><div class=\"status-row\">{''.join(index_labels)}</div></td>
               <td><span class=\"pill pill-quartile\">{html.escape(record.sjr_quartile or '—')}</span></td>
-              <td><a class=\"table-action-link\" href=\"{html.escape(record.profile_path, quote=True)}\">View profile</a></td>
+              <td><a class=\"table-action-link\" href=\"{html.escape(record.profile_path, quote=True)}\" title=\"Open journal profile for {html.escape(record.title, quote=True)}\">View profile</a></td>
             </tr>
             """.strip()
         )
