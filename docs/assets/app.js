@@ -50,17 +50,30 @@ function blurPaginationFocus() {
   }
 }
 
-function scrollElementToViewportTop(element) {
+function scrollElementToViewportTop(element, behavior = "auto") {
   if (!element) {
-    return;
+    return false;
   }
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const scrollToTarget = (behavior) => {
-    const top = Math.max(0, window.scrollY + element.getBoundingClientRect().top);
-    window.scrollTo({ top, behavior });
+  const targetTop = Math.max(0, Math.round(window.scrollY + element.getBoundingClientRect().top));
+  window.scrollTo({ top: targetTop, behavior: prefersReducedMotion ? "auto" : behavior });
+  return true;
+}
+
+function scheduleScrollToTop(getTarget) {
+  blurPaginationFocus();
+
+  const attemptScroll = (behavior = "auto") => {
+    const target = getTarget();
+    return scrollElementToViewportTop(target, behavior);
   };
-  scrollToTarget(prefersReducedMotion ? "auto" : "smooth");
-  window.setTimeout(() => scrollToTarget("auto"), prefersReducedMotion ? 0 : 220);
+
+  window.requestAnimationFrame(() => {
+    attemptScroll("smooth");
+    [120, 320, 650, 1000].forEach((delay) => {
+      window.setTimeout(() => attemptScroll("auto"), delay);
+    });
+  });
 }
 
 function safeText(value, fallback = "Not available") {
@@ -170,9 +183,8 @@ function renderHomePage(records, siteRoot) {
     summary.textContent = `${records.length.toLocaleString("en-US")} journals in the directory.`;
   }
 
-  function scrollHomeTableToTop() {
-    blurPaginationFocus();
-    scrollElementToViewportTop(table || tbody);
+  function homeScrollTarget() {
+    return tbody.querySelector("tr") || table || tbody;
   }
 
   function goToPage(nextPage, shouldScroll = false) {
@@ -271,7 +283,7 @@ function renderHomePage(records, siteRoot) {
     }
 
     if (shouldScroll) {
-      window.requestAnimationFrame(scrollHomeTableToTop);
+      scheduleScrollToTop(homeScrollTarget);
     }
   }
 
@@ -882,9 +894,8 @@ function renderSearchPage(manifest, siteRoot) {
     window.history.replaceState({}, "", nextUrl);
   }
 
-  function scrollResultsToTop() {
-    blurPaginationFocus();
-    scrollElementToViewportTop(results.firstElementChild || results);
+  function searchScrollTarget() {
+    return results.querySelector(".search-card") || results.firstElementChild || results;
   }
 
   function resetPaginationUi() {
@@ -1032,7 +1043,7 @@ function renderSearchPage(manifest, siteRoot) {
     });
 
     if (shouldScroll) {
-      window.requestAnimationFrame(scrollResultsToTop);
+      scheduleScrollToTop(searchScrollTarget);
     }
   }
 
