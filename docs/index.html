@@ -17,7 +17,7 @@
       <div class="shell">
         <a class="brand" href="./">
           <span class="brand-mark">Journal Discovery</span>
-          <span class="brand-subtitle">Journal explorer based on abstract and keyword search</span>
+          <span class="brand-subtitle">Journal search for abstracts, keywords, and titles</span>
         </a>
         <nav class="top-nav" aria-label="Primary">
           <a href="./">Browse journals</a>
@@ -30,12 +30,12 @@
         <div class="shell">
           <div class="hero-panel">
             <h1>Find journals by title, keyword, URL fragment, or article abstract.</h1>
-              <p class="hero-copy">Paste an article abstract below and the app will rank journals by how closely the abstract aligns with the journal <strong>Categories</strong> and <strong>Areas</strong>.</p>
+              <p class="hero-copy">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
             <form class="abstract-search-form" action="search/" method="get">
               <input type="hidden" name="scope" value="abstract">
               <label class="field abstract-field" for="abstract-query">
                 <span>Paste article abstract</span>
-                <textarea id="abstract-query" name="q" rows="8" placeholder="Paste the article's abstract here. The app will match it to journal categories and areas, then suggest the suitable journals based on the abstract's words and sentences."></textarea>
+                <textarea id="abstract-query" name="q" rows="8" placeholder="Paste an article abstract. The app compares it with journal categories and subject areas to suggest relevant journals."></textarea>
               </label>
               <div class="hero-actions">
                 <button type="submit">Find matching journals</button>
@@ -56,16 +56,16 @@
             <div>
               <p class="eyebrow results-eyebrow">Journal directory</p>
               <h2>Browse verified journal profiles</h2>
-              <p class="table-note">The check symbols mark whether the journal exists in the Scopus, the WoS, and the DOAJ when available. The SJR column uses the available <strong>SJR Best Quartile</strong> field from the source dataset.</p>
+              <p class="table-note">Index badges show whether a journal appears in Scopus, WoS, and DOAJ when available. The SJR column uses the best <strong>SJR Quartile</strong> provided in the source data.</p>
             </div>
-            <div class="table-chip" id="home-summary">Preparing journal table…</div>
+            <div class="table-chip" id="home-summary">Loading journal directory…</div>
           </div>
           <div class="table-card">
             <div class="table-controls">
               <div class="table-filter-pills">
-                <span class="table-pill">Scopus baseline</span>
+                <span class="table-pill">Scopus coverage</span>
                 <span class="table-pill">WoS cross-check</span>
-                <span class="table-pill">DOAJ flag when available</span>
+                <span class="table-pill">DOAJ enrichment</span>
               </div>
               <a class="button button-secondary table-cta-button" href="search/">Open advanced search</a>
               <div class="table-chip"><strong>10 journals</strong> per page</div>
@@ -296,7 +296,7 @@
     </main>
     <footer class="site-footer">
       <div class="shell footer-grid">
-        <div class="footer-note">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Licensed for use under CC BY-NC.</div>
+        <div class="footer-note">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Available under CC BY-NC.</div>
         <div class="footer-note">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
       </div>
     </footer>

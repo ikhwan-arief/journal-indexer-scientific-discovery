@@ -131,7 +131,7 @@ function renderHomePage(records, siteRoot) {
   const totalPages = Math.max(1, Math.ceil(records.length / perPage));
 
   if (summary) {
-    summary.textContent = `${records.length.toLocaleString("en-US")} journals in the current discovery index.`;
+    summary.textContent = `${records.length.toLocaleString("en-US")} journals in the directory.`;
   }
 
   function goToPage(nextPage) {
@@ -202,7 +202,7 @@ function renderHomePage(records, siteRoot) {
     }
 
     if (paginationInfo) {
-      paginationInfo.textContent = `Page ${page} of ${totalPages} · 10 journals per page`;
+      paginationInfo.textContent = `Page ${page} of ${totalPages} · 10 per page`;
     }
 
     if (paginationList) {
@@ -479,7 +479,7 @@ function renderSearchPage(manifest, siteRoot) {
       title.textContent = "Loading search dataset";
       loading.appendChild(title);
       const body = document.createElement("span");
-      body.textContent = "The search page is fetching journal shards for filtering and ranking.";
+      body.textContent = "Loading journal shards for search and filtering.";
       loading.appendChild(body);
       results.replaceChildren(loading);
     }
@@ -559,17 +559,17 @@ function renderSearchPage(manifest, siteRoot) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
     const title = document.createElement("strong");
-    title.textContent = "Search dataset is ready on demand.";
+    title.textContent = "Search data loads on demand.";
     empty.appendChild(title);
     const body = document.createElement("span");
-    body.textContent = `Enter a query or change a filter to load ${Number(manifest.summary?.total_journals || 0).toLocaleString("en-US")} journal profiles.`;
+    body.textContent = `Enter a query or apply a filter to load ${Number(manifest.summary?.total_journals || 0).toLocaleString("en-US")} journal profiles.`;
     empty.appendChild(body);
     results.appendChild(empty);
     if (resultsCount) {
       resultsCount.textContent = `${Number(manifest.summary?.total_journals || 0).toLocaleString("en-US")} profiles available.`;
     }
     if (paginationInfo) {
-      paginationInfo.textContent = "Pagination will appear after the dataset is loaded.";
+      paginationInfo.textContent = "Pagination appears after results load.";
     }
     if (paginationList) {
       paginationList.replaceChildren();
@@ -594,10 +594,10 @@ function renderSearchPage(manifest, siteRoot) {
       const empty = document.createElement("div");
       empty.className = "empty-state";
       const title = document.createElement("strong");
-      title.textContent = "No journals match the current query.";
+      title.textContent = "No journals matched your query.";
       empty.appendChild(title);
       const body = document.createElement("span");
-      body.textContent = "Try broader keywords, switch scope, or remove one of the filters.";
+      body.textContent = "Try broader keywords, switch the search scope, or remove one of the filters.";
       empty.appendChild(body);
       results.appendChild(empty);
     }

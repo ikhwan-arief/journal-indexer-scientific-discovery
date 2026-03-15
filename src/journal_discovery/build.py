@@ -557,7 +557,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
       <div class=\"shell\">
         <a class=\"brand\" href=\"./\">
           <span class=\"brand-mark\">Journal Discovery</span>
-          <span class=\"brand-subtitle\">Journal explorer based on abstract and keyword search</span>
+          <span class=\"brand-subtitle\">Journal search for abstracts, keywords, and titles</span>
         </a>
         <nav class=\"top-nav\" aria-label=\"Primary\">
           <a href=\"./\">Browse journals</a>
@@ -570,12 +570,12 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
         <div class=\"shell\">
           <div class=\"hero-panel\">
             <h1>Find journals by title, keyword, URL fragment, or article abstract.</h1>
-              <p class=\"hero-copy\">Paste an article abstract below and the app will rank journals by how closely the abstract aligns with the journal <strong>Categories</strong> and <strong>Areas</strong>.</p>
+              <p class=\"hero-copy\">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
             <form class=\"abstract-search-form\" action=\"search/\" method=\"get\">
               <input type=\"hidden\" name=\"scope\" value=\"abstract\">
               <label class=\"field abstract-field\" for=\"abstract-query\">
                 <span>Paste article abstract</span>
-                <textarea id=\"abstract-query\" name=\"q\" rows=\"8\" placeholder=\"Paste the article's abstract here. The app will match it to journal categories and areas, then suggest the suitable journals based on the abstract's words and sentences.\"></textarea>
+                <textarea id=\"abstract-query\" name=\"q\" rows=\"8\" placeholder=\"Paste an article abstract. The app compares it with journal categories and subject areas to suggest relevant journals.\"></textarea>
               </label>
               <div class=\"hero-actions\">
                 <button type=\"submit\">Find matching journals</button>
@@ -596,16 +596,16 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
             <div>
               <p class="eyebrow results-eyebrow">Journal directory</p>
               <h2>Browse verified journal profiles</h2>
-              <p class=\"table-note\">The check symbols mark whether the journal exists in the Scopus, the WoS, and the DOAJ when available. The SJR column uses the available <strong>SJR Best Quartile</strong> field from the source dataset.</p>
+              <p class=\"table-note\">Index badges show whether a journal appears in Scopus, WoS, and DOAJ when available. The SJR column uses the best <strong>SJR Quartile</strong> provided in the source data.</p>
             </div>
-            <div class=\"table-chip\" id=\"home-summary\">Preparing journal table…</div>
+            <div class=\"table-chip\" id=\"home-summary\">Loading journal directory…</div>
           </div>
           <div class=\"table-card\">
             <div class=\"table-controls\">
               <div class="table-filter-pills">
-                <span class="table-pill">Scopus baseline</span>
+                <span class="table-pill">Scopus coverage</span>
                 <span class="table-pill">WoS cross-check</span>
-                <span class="table-pill">DOAJ flag when available</span>
+                <span class="table-pill">DOAJ enrichment</span>
               </div>
               <a class="button button-secondary table-cta-button" href="search/">Open advanced search</a>
               <div class=\"table-chip\"><strong>10 journals</strong> per page</div>
@@ -637,7 +637,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
     </main>
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
-        <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Licensed for use under CC BY-NC.</div>
+        <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Available under CC BY-NC.</div>
         <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
       </div>
     </footer>
@@ -666,7 +666,7 @@ def search_page_html(summary: SiteSummary) -> str:
       <div class=\"shell\">
         <a class=\"brand\" href=\"../\">
           <span class=\"brand-mark\">Journal Discovery</span>
-          <span class=\"brand-subtitle\">Search-first journal profile explorer</span>
+          <span class=\"brand-subtitle\">Advanced journal search</span>
         </a>
         <nav class=\"top-nav\" aria-label=\"Primary\">
           <a href=\"../\">Browse journals</a>
@@ -678,24 +678,24 @@ def search_page_html(summary: SiteSummary) -> str:
       <section class=\"hero\">
         <div class=\"shell\">
           <div class=\"hero-panel\">
-            <p class=\"eyebrow\">Profile search</p>
-            <h1>Search journal profiles with filters that match how users actually ask.</h1>
-            <p class=\"hero-copy\">Use a full article abstract, free keywords, an exact title, a fragment of a journal URL, or narrow the result set by quartile, country, and indexing labels. Abstract matching is scored specifically from each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
+            <p class=\"eyebrow\">Advanced search</p>
+            <h1>Search journal profiles with flexible filters.</h1>
+            <p class=\"hero-copy\">Search by abstract, keywords, exact title, publisher, or URL fragment, then refine results by quartile, country, and index coverage. Abstract matching compares your text with each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
             <div class=\"stats-grid\">
               <div class=\"stat-card\">
-                <p class=\"stat-label\">Journals indexed</p>
+                <p class=\"stat-label\">Indexed journals</p>
                 <p class=\"stat-value\">{summary.total_journals:,}</p>
               </div>
               <div class=\"stat-card\">
-                <p class=\"stat-label\">WoS matches</p>
+                <p class=\"stat-label\">WoS-linked journals</p>
                 <p class=\"stat-value\">{summary.total_wos:,}</p>
               </div>
               <div class=\"stat-card\">
-                <p class=\"stat-label\">DOAJ matches</p>
+                <p class=\"stat-label\">DOAJ-linked journals</p>
                 <p class=\"stat-value\">{summary.total_doaj:,}</p>
               </div>
               <div class=\"stat-card\">
-                <p class=\"stat-label\">Missing external websites</p>
+                <p class=\"stat-label\">Profiles without external websites</p>
                 <p class=\"stat-value\">{summary.total_missing_websites:,}</p>
               </div>
             </div>
@@ -710,14 +710,14 @@ def search_page_html(summary: SiteSummary) -> str:
               <div class=\"search-form-grid\">
                 <div class=\"field search-query-field\">
                   <label for=\"q\">Query</label>
-                  <textarea id=\"q\" name=\"q\" rows=\"7\" placeholder=\"Paste an article abstract, or enter a title, keyword, publisher name, or URL fragment.\"></textarea>
+                  <textarea id=\"q\" name=\"q\" rows=\"7\" placeholder=\"Paste an article abstract, or enter a title, keyword, publisher, or URL fragment.\"></textarea>
                 </div>
                 <div class=\"search-filter-grid\">
                   <div class=\"field\">
                     <label for=\"scope\">Search scope</label>
                     <select id=\"scope\" name=\"scope\">
-                      <option value=\"all\">Keyword, title, publisher, country, URL</option>
-                      <option value=\"abstract\">Article abstract to journal topic fit</option>
+                      <option value=\"all\">Keywords, titles, publishers, countries, and URLs</option>
+                      <option value=\"abstract\">Abstract-to-topic matching</option>
                       <option value=\"title\">Title only</option>
                       <option value=\"publisher\">Publisher only</option>
                       <option value=\"url\">URL only</option>
@@ -752,13 +752,13 @@ def search_page_html(summary: SiteSummary) -> str:
               </div>
               <div class=\"hero-actions\">
                 <button type=\"submit\">Search journals</button>
-                <a class=\"button button-secondary\" href=\"../\">Back to front page</a>
+                <a class=\"button button-secondary\" href=\"../\">Back to home</a>
               </div>
             </form>
           </div>
           <div class=\"results-toolbar\">
             <div class=\"results-count\" id=\"results-count\">Loading profiles…</div>
-            <div class=\"table-chip\">Public runtime: static JSON only</div>
+            <div class=\"table-chip\">Static site runtime</div>
           </div>
           <div class=\"search-results\" id=\"search-results\"></div>
           <div class=\"pagination\">
@@ -770,7 +770,7 @@ def search_page_html(summary: SiteSummary) -> str:
     </main>
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
-        <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Licensed for use under CC BY-NC.</div>
+        <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Available under CC BY-NC.</div>
         <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
       </div>
     </footer>
@@ -829,7 +829,7 @@ def profile_page_html(record: JournalRecord) -> str:
       <div class=\"shell\">
         <a class=\"brand\" href=\"../../\">
           <span class=\"brand-mark\">Journal Discovery</span>
-          <span class=\"brand-subtitle\">Individual journal profile</span>
+          <span class=\"brand-subtitle\">Journal profile</span>
         </a>
         <nav class=\"top-nav\" aria-label=\"Primary\">
           <a href=\"../../\">Browse journals</a>
@@ -850,11 +850,11 @@ def profile_page_html(record: JournalRecord) -> str:
           <div class=\"hero-panel\">
             <p class=\"eyebrow\">Journal profile</p>
             <h1>{html.escape(record.title)}</h1>
-            <p class=\"profile-copy\">This profile is generated from the current public dataset snapshot. When a DOAJ match exists, website, APC, license, and copyright fields are filled from that source; otherwise unavailable fields are still shown instead of hidden.</p>
+            <p class=\"profile-copy\">This profile is generated from the current public data snapshot. When a DOAJ match is available, website, APC, license, and copyright details are filled from that source. Unavailable fields remain visible for consistency.</p>
             <div class=\"label-row\">{render_index_labels(record)}</div>
             <div class=\"profile-links\">
               <a class=\"button button-secondary\" href=\"../../search/?q={search_query}&scope=title\">Search similar journals</a>
-              <a class=\"button button-primary\" href=\"../../\">Back to front page</a>
+              <a class=\"button button-primary\" href=\"../../\">Back to home</a>
             </div>
           </div>
         </div>
@@ -885,7 +885,7 @@ def profile_page_html(record: JournalRecord) -> str:
                 </div>
                 <div class=\"detail-item\">
                   <div class=\"field-name\">Data note</div>
-                  <div class=\"field-value\">External website, APC, license, and copyright values come from the current DOAJ snapshot when a journal match is found.</div>
+                  <div class=\"field-value\">Website, APC, license, and copyright details come from the current DOAJ snapshot when a journal match is available.</div>
                 </div>
               </aside>
             </div>
@@ -895,7 +895,7 @@ def profile_page_html(record: JournalRecord) -> str:
     </main>
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
-        <div class=\"footer-note\">Generated static profile for secure public hosting.</div>
+        <div class=\"footer-note\">Static profile page for public access.</div>
         <div class=\"footer-note\">Source ID {html.escape(record.sourceid)} · Rank {record.rank}</div>
       </div>
     </footer>

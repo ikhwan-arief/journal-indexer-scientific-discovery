@@ -17,7 +17,7 @@
       <div class="shell">
         <a class="brand" href="../">
           <span class="brand-mark">Journal Discovery</span>
-          <span class="brand-subtitle">Search-first journal profile explorer</span>
+          <span class="brand-subtitle">Advanced journal search</span>
         </a>
         <nav class="top-nav" aria-label="Primary">
           <a href="../">Browse journals</a>
@@ -29,24 +29,24 @@
       <section class="hero">
         <div class="shell">
           <div class="hero-panel">
-            <p class="eyebrow">Profile search</p>
-            <h1>Search journal profiles with filters that match how users actually ask.</h1>
-            <p class="hero-copy">Use a full article abstract, free keywords, an exact title, a fragment of a journal URL, or narrow the result set by quartile, country, and indexing labels. Abstract matching is scored specifically from each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
+            <p class="eyebrow">Advanced search</p>
+            <h1>Search journal profiles with flexible filters.</h1>
+            <p class="hero-copy">Search by abstract, keywords, exact title, publisher, or URL fragment, then refine results by quartile, country, and index coverage. Abstract matching compares your text with each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
             <div class="stats-grid">
               <div class="stat-card">
-                <p class="stat-label">Journals indexed</p>
+                <p class="stat-label">Indexed journals</p>
                 <p class="stat-value">29,553</p>
               </div>
               <div class="stat-card">
-                <p class="stat-label">WoS matches</p>
+                <p class="stat-label">WoS-linked journals</p>
                 <p class="stat-value">17,799</p>
               </div>
               <div class="stat-card">
-                <p class="stat-label">DOAJ matches</p>
+                <p class="stat-label">DOAJ-linked journals</p>
                 <p class="stat-value">8,544</p>
               </div>
               <div class="stat-card">
-                <p class="stat-label">Missing external websites</p>
+                <p class="stat-label">Profiles without external websites</p>
                 <p class="stat-value">21,009</p>
               </div>
             </div>
@@ -61,14 +61,14 @@
               <div class="search-form-grid">
                 <div class="field search-query-field">
                   <label for="q">Query</label>
-                  <textarea id="q" name="q" rows="7" placeholder="Paste an article abstract, or enter a title, keyword, publisher name, or URL fragment."></textarea>
+                  <textarea id="q" name="q" rows="7" placeholder="Paste an article abstract, or enter a title, keyword, publisher, or URL fragment."></textarea>
                 </div>
                 <div class="search-filter-grid">
                   <div class="field">
                     <label for="scope">Search scope</label>
                     <select id="scope" name="scope">
-                      <option value="all">Keyword, title, publisher, country, URL</option>
-                      <option value="abstract">Article abstract to journal topic fit</option>
+                      <option value="all">Keywords, titles, publishers, countries, and URLs</option>
+                      <option value="abstract">Abstract-to-topic matching</option>
                       <option value="title">Title only</option>
                       <option value="publisher">Publisher only</option>
                       <option value="url">URL only</option>
@@ -103,13 +103,13 @@
               </div>
               <div class="hero-actions">
                 <button type="submit">Search journals</button>
-                <a class="button button-secondary" href="../">Back to front page</a>
+                <a class="button button-secondary" href="../">Back to home</a>
               </div>
             </form>
           </div>
           <div class="results-toolbar">
             <div class="results-count" id="results-count">Loading profiles…</div>
-            <div class="table-chip">Public runtime: static JSON only</div>
+            <div class="table-chip">Static site runtime</div>
           </div>
           <div class="search-results" id="search-results"></div>
           <div class="pagination">
@@ -121,7 +121,7 @@
     </main>
     <footer class="site-footer">
       <div class="shell footer-grid">
-        <div class="footer-note">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Licensed for use under CC BY-NC.</div>
+        <div class="footer-note">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Available under CC BY-NC.</div>
         <div class="footer-note">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
       </div>
     </footer>
