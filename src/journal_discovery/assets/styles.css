@@ -359,6 +359,11 @@ button[type="submit"]:hover {
   margin-bottom: 1.15rem;
 }
 
+.results-toolbar-actions {
+  display: flex;
+  margin-left: auto;
+}
+
 .table-filter-pills {
   display: flex;
   flex-wrap: wrap;
@@ -588,6 +593,15 @@ tbody tr:last-child td {
   gap: 1rem;
   flex-wrap: wrap;
   padding-top: 1.15rem;
+}
+
+.pagination-inline {
+  justify-content: flex-end;
+  padding-top: 0;
+}
+
+.pagination-inline .pagination-info {
+  white-space: nowrap;
 }
 
 .pagination-list {
@@ -891,5 +905,15 @@ tbody tr:last-child td {
 
   .table-filter-pills {
     width: 100%;
+  }
+
+  .results-toolbar-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .pagination-inline {
+    width: 100%;
+    justify-content: flex-start;
   }
 }

@@ -548,6 +548,14 @@ def maybe_canonical(relative_path: str) -> str:
     return f'<link rel="canonical" href="{html.escape(full_url, quote=True)}">'
 
 
+def version_token(summary: SiteSummary) -> str:
+    return quote_plus(summary.generated_at)
+
+
+def versioned_path(relative_path: str, summary: SiteSummary) -> str:
+    return f"{relative_path}?v={version_token(summary)}"
+
+
 def render_index_labels(record: JournalRecord) -> str:
     labels: list[str] = []
     if record.scopus_indexed:
@@ -599,6 +607,9 @@ def render_initial_rows(records: list[JournalRecord]) -> str:
 
 
 def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
+    stylesheet_href = versioned_path("assets/styles.css", summary)
+    script_src = versioned_path("assets/app.js", summary)
+    data_url = versioned_path("data/home.json", summary)
     return f"""<!doctype html>
 <html lang=\"en\">
   <head>
@@ -609,10 +620,10 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
     <meta name=\"robots\" content=\"index,follow\">
     <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
     {maybe_canonical('')}
-    <link rel=\"stylesheet\" href=\"assets/styles.css\">
-    <script defer src=\"assets/app.js\"></script>
+    <link rel=\"stylesheet\" href=\"{html.escape(stylesheet_href, quote=True)}\">
+    <script defer src=\"{html.escape(script_src, quote=True)}\"></script>
   </head>
-  <body data-page=\"home\" data-site-root=\".\" data-data-url=\"data/home.json\">
+  <body data-page=\"home\" data-site-root=\".\" data-data-url=\"{html.escape(data_url, quote=True)}\">
     <a class=\"skip-link\" href=\"#main\">Skip to content</a>
     <header class=\"site-header\">
       <div class=\"shell\">
@@ -707,6 +718,9 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
 
 
 def search_page_html(summary: SiteSummary) -> str:
+    stylesheet_href = versioned_path("../assets/styles.css", summary)
+    script_src = versioned_path("../assets/app.js", summary)
+    data_url = versioned_path("../data/search-manifest.json", summary)
     return f"""<!doctype html>
 <html lang=\"en\">
   <head>
@@ -717,10 +731,10 @@ def search_page_html(summary: SiteSummary) -> str:
     <meta name=\"robots\" content=\"index,follow\">
     <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
     {maybe_canonical('search/')}
-    <link rel=\"stylesheet\" href=\"../assets/styles.css\">
-    <script defer src=\"../assets/app.js\"></script>
+    <link rel=\"stylesheet\" href=\"{html.escape(stylesheet_href, quote=True)}\">
+    <script defer src=\"{html.escape(script_src, quote=True)}\"></script>
   </head>
-  <body data-page=\"search\" data-site-root=\"..\" data-data-url=\"../data/search-manifest.json\">
+  <body data-page=\"search\" data-site-root=\"..\" data-data-url=\"{html.escape(data_url, quote=True)}\">
     <a class=\"skip-link\" href=\"#main\">Skip to content</a>
     <header class=\"site-header\">
       <div class=\"shell\">
@@ -800,6 +814,12 @@ def search_page_html(summary: SiteSummary) -> str:
           </div>
           <div class=\"results-toolbar\">
             <div class=\"results-count\" id=\"results-count\">Journal profiles</div>
+            <div class=\"results-toolbar-actions\">
+              <div class=\"pagination pagination-inline\">
+                <div class=\"pagination-info\" id=\"search-pagination-top-info\"></div>
+                <div class=\"pagination-list\" id=\"search-pagination-top-list\"></div>
+              </div>
+            </div>
           </div>
           <div class=\"search-results\" id=\"search-results\"></div>
           <div class=\"pagination\">
@@ -820,7 +840,10 @@ def search_page_html(summary: SiteSummary) -> str:
 """
 
 
-def profile_page_html() -> str:
+def profile_page_html(summary: SiteSummary) -> str:
+    stylesheet_href = versioned_path("../assets/styles.css", summary)
+    script_src = versioned_path("../assets/app.js", summary)
+    data_url = versioned_path("../data/profile-index.json", summary)
     return f"""<!doctype html>
 <html lang=\"en\">
   <head>
@@ -834,10 +857,10 @@ def profile_page_html() -> str:
     <meta property=\"og:type\" content=\"website\">
     <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
     {maybe_canonical('journal/')}
-    <link rel=\"stylesheet\" href=\"../assets/styles.css\">
-    <script defer src=\"../assets/app.js\"></script>
+    <link rel=\"stylesheet\" href=\"{html.escape(stylesheet_href, quote=True)}\">
+    <script defer src=\"{html.escape(script_src, quote=True)}\"></script>
   </head>
-  <body data-page=\"profile\" data-site-root=\"..\" data-data-url=\"../data/profile-index.json\">
+  <body data-page=\"profile\" data-site-root=\"..\" data-data-url=\"{html.escape(data_url, quote=True)}\">
     <a class=\"skip-link\" href=\"#main\">Skip to content</a>
     <header class=\"site-header\">
       <div class=\"shell\">
@@ -946,7 +969,7 @@ def write_pages(records: list[JournalRecord], summary: SiteSummary) -> None:
         encoding="utf-8",
     )
     (DOCS_DIR / "journal" / "index.html").write_text(
-        profile_page_html(),
+      profile_page_html(summary),
         encoding="utf-8",
     )
     (DOCS_DIR / "404.html").write_text(

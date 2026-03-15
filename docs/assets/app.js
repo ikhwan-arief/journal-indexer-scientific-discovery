@@ -29,6 +29,17 @@ function joinRelative(siteRoot, relativePath) {
   return `${siteRoot}/${relativePath}`;
 }
 
+function withVersion(relativePath, versionTag) {
+  if (!relativePath || !versionTag) {
+    return relativePath;
+  }
+  if (/[?&]v=/.test(relativePath)) {
+    return relativePath;
+  }
+  const separator = relativePath.includes("?") ? "&" : "?";
+  return `${relativePath}${separator}v=${encodeURIComponent(versionTag)}`;
+}
+
 function safeText(value, fallback = "Not available") {
   if (value === null || value === undefined || value === "") {
     return fallback;
@@ -641,6 +652,7 @@ function renderProfilePage(record, siteRoot) {
 async function renderDynamicProfile(profileIndex, siteRoot) {
   const params = new URLSearchParams(window.location.search);
   const sourceid = params.get("sourceid") || "";
+  const versionTag = profileIndex.summary?.generated_at || "";
 
   if (!sourceid) {
     renderProfileEmptyState(
@@ -659,7 +671,7 @@ async function renderDynamicProfile(profileIndex, siteRoot) {
     return;
   }
 
-  const response = await fetch(joinRelative(siteRoot, chunkPath), { credentials: "same-origin" });
+  const response = await fetch(joinRelative(siteRoot, withVersion(chunkPath, versionTag)), { credentials: "same-origin" });
   if (!response.ok) {
     throw new Error(`Failed to load journal profile data: ${response.status}`);
   }
@@ -684,6 +696,8 @@ function renderSearchPage(manifest, siteRoot) {
   const form = document.querySelector("#search-form");
   const results = document.querySelector("#search-results");
   const resultsCount = document.querySelector("#results-count");
+  const topPaginationInfo = document.querySelector("#search-pagination-top-info");
+  const topPaginationList = document.querySelector("#search-pagination-top-list");
   const paginationInfo = document.querySelector("#search-pagination-info");
   const paginationList = document.querySelector("#search-pagination-list");
   const queryInput = document.querySelector("#q");
@@ -694,8 +708,13 @@ function renderSearchPage(manifest, siteRoot) {
   const perPage = 10;
   const chunkPaths = manifest.chunk_paths || [];
   const titlePrefixChunks = manifest.title_prefix_chunks || {};
+  const versionTag = manifest.summary?.generated_at || "";
   const loadedChunkMap = new Map();
   const loadingChunkMap = new Map();
+  const paginationRegions = [
+    { info: topPaginationInfo, list: topPaginationList },
+    { info: paginationInfo, list: paginationList },
+  ];
   let records = [];
   let page = 1;
 
@@ -765,7 +784,7 @@ function renderSearchPage(manifest, siteRoot) {
         return loadingChunkMap.get(chunkPath);
       }
 
-      const fetchPromise = fetch(joinRelative(siteRoot, chunkPath), { credentials: "same-origin" })
+      const fetchPromise = fetch(joinRelative(siteRoot, withVersion(chunkPath, versionTag)), { credentials: "same-origin" })
         .then(async (response) => {
           if (!response.ok) {
             throw new Error(`Failed to load search chunk: ${response.status}`);
@@ -830,6 +849,56 @@ function renderSearchPage(manifest, siteRoot) {
     window.history.replaceState({}, "", nextUrl);
   }
 
+  function scrollResultsToTop() {
+    const scrollTarget = results.firstElementChild || results;
+    if (!scrollTarget) {
+      return;
+    }
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    scrollTarget.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+  }
+
+  function resetPaginationUi() {
+    for (const region of paginationRegions) {
+      if (region.info) {
+        region.info.textContent = "";
+      }
+      if (region.list) {
+        region.list.replaceChildren();
+      }
+    }
+  }
+
+  function renderPaginationUi(totalPages, onPageChange) {
+    const buttons = [];
+    buttons.push({ label: "Prev", page: page - 1, disabled: page === 1 });
+    const startPage = Math.max(1, page - 2);
+    const endPage = Math.min(totalPages, startPage + 4);
+    for (let index = startPage; index <= endPage; index += 1) {
+      buttons.push({ label: String(index), page: index, current: index === page });
+    }
+    buttons.push({ label: "Next", page: page + 1, disabled: page === totalPages });
+
+    for (const region of paginationRegions) {
+      if (region.info) {
+        region.info.textContent = `Page ${page} of ${totalPages}`;
+      }
+      if (!region.list) {
+        continue;
+      }
+      region.list.replaceChildren();
+      for (const item of buttons) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = item.label;
+        button.disabled = Boolean(item.disabled);
+        if (item.current) button.setAttribute("aria-current", "page");
+        button.addEventListener("click", () => onPageChange(item.page));
+        region.list.appendChild(button);
+      }
+    }
+  }
+
   function renderPrompt() {
     results.replaceChildren();
     const empty = document.createElement("div");
@@ -844,15 +913,10 @@ function renderSearchPage(manifest, siteRoot) {
     if (resultsCount) {
       resultsCount.textContent = `${Number(manifest.summary?.total_journals || 0).toLocaleString("en-US")} profiles available.`;
     }
-    if (paginationInfo) {
-      paginationInfo.textContent = "";
-    }
-    if (paginationList) {
-      paginationList.replaceChildren();
-    }
+    resetPaginationUi();
   }
 
-  function renderPage() {
+  function renderPage(shouldScroll = false) {
     const filtered = applyFilters();
     const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
     if (page > totalPages) {
@@ -932,32 +996,14 @@ function renderSearchPage(manifest, siteRoot) {
       results.appendChild(article);
     }
 
-    if (paginationInfo) {
-      paginationInfo.textContent = `Page ${page} of ${totalPages}`;
-    }
-    if (paginationList) {
-      paginationList.replaceChildren();
-      const buttons = [];
-      buttons.push({ label: "Prev", page: page - 1, disabled: page === 1 });
-      const startPage = Math.max(1, page - 2);
-      const endPage = Math.min(totalPages, startPage + 4);
-      for (let index = startPage; index <= endPage; index += 1) {
-        buttons.push({ label: String(index), page: index, current: index === page });
-      }
-      buttons.push({ label: "Next", page: page + 1, disabled: page === totalPages });
-      for (const item of buttons) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.textContent = item.label;
-        button.disabled = Boolean(item.disabled);
-        if (item.current) button.setAttribute("aria-current", "page");
-        button.addEventListener("click", () => {
-          page = item.page;
-          syncUrl();
-          renderPage();
-        });
-        paginationList.appendChild(button);
-      }
+    renderPaginationUi(totalPages, (nextPage) => {
+      page = nextPage;
+      syncUrl();
+      renderPage(true);
+    });
+
+    if (shouldScroll) {
+      window.requestAnimationFrame(scrollResultsToTop);
     }
   }
 
