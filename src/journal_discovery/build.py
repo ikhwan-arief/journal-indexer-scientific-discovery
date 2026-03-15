@@ -749,28 +749,32 @@ def search_page_html(summary: SiteSummary) -> str:
       </div>
     </header>
     <main id=\"main\">
-      <section class=\"hero\">
-        <div class=\"shell\">
-          <div class=\"hero-panel\">
-            <p class=\"eyebrow\">Advanced search</p>
-            <h1>Search journal profiles with flexible filters.</h1>
-            <p class=\"hero-copy\">Search by abstract, keywords, exact title, publisher, or URL fragment, then refine results by quartile, country, and index coverage. Abstract matching compares your text with each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
-          </div>
-        </div>
-      </section>
-      <section class=\"section\">
-        <div class=\"shell\" id=\"app-error\"></div>
-        <div class=\"shell\">
-          <div class=\"filter-panel\">
-            <form id=\"search-form\">
-              <div class=\"search-form-grid\">
-                <div class=\"field search-query-field\">
-                  <label for=\"q\">Query</label>
-                  <textarea id=\"q\" name=\"q\" rows=\"7\" placeholder=\"Paste an article abstract, or enter a title, keyword, publisher, or URL fragment.\"></textarea>
+        <section class=\"hero\">
+          <div class=\"shell\">
+            <div class=\"hero-panel\">
+              <div class=\"hero-content\">
+                <h1>Find journals by title, keyword, URL fragment, or article abstract.</h1>
+                <p class=\"hero-copy\">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
+                <form class=\"abstract-search-form\" action=\"search/\" method=\"get\">
+                  <input type=\"hidden\" name=\"scope\" value=\"abstract\">
+                  <label class=\"field abstract-field\" for=\"abstract-query\">
+                    <span>Paste article abstract</span>
+                    <textarea id=\"abstract-query\" name=\"q\" rows=\"8\" placeholder=\"Paste an article abstract. The app compares it with journal categories and subject areas to suggest relevant journals.\"></textarea>
+                  </label>
+                  <div class=\"hero-actions\">
+                    <button type=\"submit\">Find matching journals</button>
+                    <a class=\"button button-secondary\" href=\"search/\">Open advanced search</a>
+                  </div>
+                </form>
+                <div class=\"hero-actions\">
+                  <a class=\"button button-secondary\" href=\"#journal-table\">Browse all journals</a>
                 </div>
-                <div class=\"search-filter-grid\">
-                  <div class=\"field\">
-                    <label for=\"scope\">Search scope</label>
+              </div>
+              <div class=\"hero-image\">
+                <img src=\"assets/home.png\" alt=\"Journal Discovery Illustration\" loading=\"lazy\" />
+              </div>
+            </div>
+          </div>
                     <select id=\"scope\" name=\"scope\">
                       <option value=\"all\">Keywords, titles, publishers, countries, and URLs</option>
                       <option value=\"abstract\">Abstract-to-topic matching</option>
