@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Search Journal Profiles | Journal Discovery</title>
+    <meta name="description" content="Search journal profiles by abstract, keyword, full title, publisher, URL fragment, country, indexing status, or SJR quartile.">
+    <meta name="robots" content="index,follow">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'">
+    
+    <link rel="stylesheet" href="../assets/styles.css">
+    <script defer src="../assets/app.js"></script>
+  </head>
+  <body data-page="search" data-site-root=".." data-data-url="../data/search-manifest.json">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="shell">
+        <a class="brand" href="../">
+          <span class="brand-mark">Journal Discovery</span>
+          <span class="brand-subtitle">Search-first journal profile explorer</span>
+        </a>
+        <nav class="top-nav" aria-label="Primary">
+          <a href="../">Browse journals</a>
+          <a href="./">Search profiles</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main">
+      <section class="hero">
+        <div class="shell">
+          <div class="hero-panel">
+            <p class="eyebrow">Profile search</p>
+            <h1>Search journal profiles with filters that match how users actually ask.</h1>
+            <p class="hero-copy">Use a full article abstract, free keywords, an exact title, a fragment of a journal URL, or narrow the result set by quartile, country, and indexing labels. Abstract matching is scored specifically from each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <p class="stat-label">Journals indexed</p>
+                <p class="stat-value">29,553</p>
+              </div>
+              <div class="stat-card">
+                <p class="stat-label">WoS matches</p>
+                <p class="stat-value">17,799</p>
+              </div>
+              <div class="stat-card">
+                <p class="stat-label">DOAJ matches</p>
+                <p class="stat-value">8,544</p>
+              </div>
+              <div class="stat-card">
+                <p class="stat-label">Missing external websites</p>
+                <p class="stat-value">21,009</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="shell" id="app-error"></div>
+        <div class="shell">
+          <div class="filter-panel">
+            <form id="search-form">
+              <div class="search-form-grid">
+                <div class="field search-query-field">
+                  <label for="q">Query</label>
+                  <textarea id="q" name="q" rows="7" placeholder="Paste an article abstract, or enter a title, keyword, publisher name, or URL fragment."></textarea>
+                </div>
+                <div class="search-filter-grid">
+                  <div class="field">
+                    <label for="scope">Search scope</label>
+                    <select id="scope" name="scope">
+                      <option value="all">Keyword, title, publisher, country, URL</option>
+                      <option value="abstract">Article abstract to journal topic fit</option>
+                      <option value="title">Title only</option>
+                      <option value="publisher">Publisher only</option>
+                      <option value="url">URL only</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="index-filter">Index filter</label>
+                    <select id="index-filter" name="index">
+                      <option value="all">All indices</option>
+                      <option value="scopus">Scopus only</option>
+                      <option value="wos">WoS only</option>
+                      <option value="doaj">DOAJ only</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="quartile-filter">Best quartile</label>
+                    <select id="quartile-filter" name="quartile">
+                      <option value="all">All quartiles</option>
+                      <option value="Q1">Q1</option>
+                      <option value="Q2">Q2</option>
+                      <option value="Q3">Q3</option>
+                      <option value="Q4">Q4</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="country-filter">Country</label>
+                    <select id="country-filter" name="country">
+                      <option value="all">All countries</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div class="hero-actions">
+                <button type="submit">Search journals</button>
+                <a class="button button-secondary" href="../">Back to front page</a>
+              </div>
+            </form>
+          </div>
+          <div class="results-toolbar">
+            <div class="results-count" id="results-count">Loading profiles…</div>
+            <div class="table-chip">Public runtime: static JSON only</div>
+          </div>
+          <div class="search-results" id="search-results"></div>
+          <div class="pagination">
+            <div class="pagination-info" id="search-pagination-info">Loading pagination…</div>
+            <div class="pagination-list" id="search-pagination-list"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="shell footer-grid">
+        <div class="footer-note">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Licensed for use under CC BY-NC.</div>
+        <div class="footer-note">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Journal Discovery | Match journal profiles from article abstracts</title>
+    <meta name="description" content="Search and browse journal discovery data built from Scimago Journal Rank 2024, with abstract-to-journal matching based on journal categories and areas.">
+    <meta name="robots" content="index,follow">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'">
+    
+    <link rel="stylesheet" href="assets/styles.css">
+    <script defer src="assets/app.js"></script>
+  </head>
+  <body data-page="home" data-site-root="." data-data-url="data/home.json">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="shell">
+        <a class="brand" href="./">
+          <span class="brand-mark">Journal Discovery</span>
+          <span class="brand-subtitle">Journal explorer based on abstract and keyword search</span>
+        </a>
+        <nav class="top-nav" aria-label="Primary">
+          <a href="./">Browse journals</a>
+          <a href="search/">Search profiles</a>
+        </nav>
+      </div>
+    </header>
+    <main id="main">
+      <section class="hero">
+        <div class="shell">
+          <div class="hero-panel">
+            <h1>Find journals by title, keyword, URL fragment, or article abstract.</h1>
+              <p class="hero-copy">Paste an article abstract below and the app will rank journals by how closely the abstract aligns with the journal <strong>Categories</strong> and <strong>Areas</strong>.</p>
+            <form class="abstract-search-form" action="search/" method="get">
+              <input type="hidden" name="scope" value="abstract">
+              <label class="field abstract-field" for="abstract-query">
+                <span>Paste article abstract</span>
+                <textarea id="abstract-query" name="q" rows="8" placeholder="Paste the article's abstract here. The app will match it to journal categories and areas, then suggest the suitable journals based on the abstract's words and sentences."></textarea>
+              </label>
+              <div class="hero-actions">
+                <button type="submit">Find matching journals</button>
+                <a class="button button-secondary" href="search/">Open advanced search</a>
+              </div>
+            </form>
+            <div class="hero-actions">
+              <a class="button button-primary" href="search/">Open search experience</a>
+              <a class="button button-secondary" href="#journal-table">Browse all journals</a>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="shell" id="app-error"></div>
+        <div class="shell">
+          <div class="section-heading section-heading-results">
+            <div>
+              <p class="eyebrow results-eyebrow">Journal directory</p>
+              <h2>Browse verified journal profiles</h2>
+              <p class="table-note">The check symbols mark whether the journal exists in the Scopus, the WoS, and the DOAJ when available. The SJR column uses the available <strong>SJR Best Quartile</strong> field from the source dataset.</p>
+            </div>
+            <div class="table-chip" id="home-summary">Preparing journal table…</div>
+          </div>
+          <div class="table-card">
+            <div class="table-controls">
+              <div class="table-filter-pills">
+                <span class="table-pill">Scopus baseline</span>
+                <span class="table-pill">WoS cross-check</span>
+                <span class="table-pill">DOAJ flag when available</span>
+              </div>
+              <a class="button button-secondary table-cta-button" href="search/">Open advanced search</a>
+              <div class="table-chip"><strong>10 journals</strong> per page</div>
+            </div>
+            <div class="table-wrap">
+              <table id="journal-table">
+                <thead>
+                  <tr>
+                    <th>Journal title</th>
+                    <th>Publisher</th>
+                    <th>Focus areas</th>
+                    <th>Indexed in</th>
+                    <th>SJR quartile</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="journal-table-body">
+                  <tr>
+              <td>
+                <div class="table-title">
+                  <a href="journals/ca-a-cancer-journal-for-clinicians-28773/">Ca-A Cancer Journal for Clinicians</a>
+                </div>
+              </td>
+              <td>
+                <div class="table-publisher" title="John Wiley and Sons Inc">John Wiley and Sons Inc</div>
+                <div class="mini-meta" title="United States">United States</div>
+              </td>
+              <td>
+                <div class="topic-stack">
+                  <div class="topic-primary" title="Medicine">Medicine</div>
+                  <div class="topic-secondary" title="Hematology (Q1); Oncology (Q1)">Hematology (Q1); Oncology (Q1)</div>
+                </div>
+              </td>
+              <td><div class="status-row"><span class="label label-scopus">Scopus</span><span class="label label-wos">WoS</span></div></td>
+              <td><span class="pill pill-quartile">Q1</span></td>
+              <td><a class="table-action-link" href="journals/ca-a-cancer-journal-for-clinicians-28773/" title="Open journal profile for Ca-A Cancer Journal for Clinicians">View profile</a></td>
+            </tr>
+<tr>
+              <td>
+                <div class="table-title">
+                  <a href="journals/mmwr-recommendations-and-reports-19434/">MMWR Recommendations and Reports</a>
+                </div>
+              </td>
+              <td>
+                <div class="table-publisher" title="Centers for Disease Control and Prevention (CDC)">Centers for Disease Control and Prevention (CDC)</div>
+                <div class="mini-meta" title="United States">United States</div>
+              </td>
+              <td>
+                <div class="topic-stack">
+                  <div class="topic-primary" title="Environmental Science; Health Professions; Medicine; Social Sciences">Environmental Science; Health Professions; Medicine; Social Sciences</div>
+                  <div class="topic-secondary" title="Epidemiology (Q1); Health Information Management (Q1); Health (social science) (Q1); Health, Toxicology and Mutagenesis (Q1); Medicine (miscellaneous) (Q1)">Epidemiology (Q1); Health Information Management (Q1); Health (social science) (Q1); Health, Toxicology and Mutagenesis (Q1); Medicine (miscellaneous) (Q1)</div>
+                </div>
+              </td>
+              <td><div class="status-row"><span class="label label-scopus">Scopus</span><span class="label label-wos">WoS</span></div></td>
+              <td><span class="pill pill-quartile">Q1</span></td>
+              <td><a class="table-action-link" href="journals/mmwr-recommendations-and-reports-19434/" title="Open journal profile for MMWR Recommendations and Reports">View profile</a></td>
+            </tr>
+<tr>
+              <td>
+                <div class="table-title">
+                  <a href="journals/nature-reviews-molecular-cell-biology-20315/">Nature Reviews Molecular Cell Biology</a>
+                </div>
+              </td>
+              <td>
+                <div class="table-publisher" title="Nature Research">Nature Research</div>
+                <div class="mini-meta" title="United Kingdom">United Kingdom</div>
+              </td>
+              <td>
+                <div class="topic-stack">
+                  <div class="topic-primary" title="Biochemistry, Genetics and Molecular Biology">Biochemistry, Genetics and Molecular Biology</div>
+                  <div class="topic-secondary" title="Cell Biology (Q1); Molecular Biology (Q1)">Cell Biology (Q1); Molecular Biology (Q1)</div>
+                </div>
+              </td>
+              <td><div class="status-row"><span class="label label-scopus">Scopus</span><span class="label label-wos">WoS</span></div></td>
+              <td><span class="pill pill-quartile">Q1</span></td>
+              <td><a class="table-action-link" href="journals/nature-reviews-molecular-cell-biology-20315/" title="Open journal profile for Nature Reviews Molecular Cell Biology">View profile</a></td>
+            </tr>
+<tr>
+              <td>
+                <div class="table-title">
+                  <a href="journals/quarterly-journal-of-economics-29431/">Quarterly Journal of Economics</a>
+                </div>
+              </td>
+              <td>
+                <div class="table-publisher" title="Oxford University Press">Oxford University Press</div>
+                <div class="mini-meta" title="United Kingdom">United Kingdom</div>
+              </td>
+              <td>
+                <div class="topic-stack">
+                  <div class="topic-primary" title="Economics, Econometrics and Finance">Economics, Econometrics and Finance</div>
+                  <div class="topic-secondary" title="Economics and Econometrics (Q1)">Economics and Econometrics (Q1)</div>
+                </div>
+              </td>
+              <td><div class="status-row"><span class="label label-scopus">Scopus</span><span class="label label-wos">WoS</span></div></td>
+              <td><span class="pill pill-quartile">Q1</span></td>
+              <td><a class="table-action-link" href="journals/quarterly-journal-of-economics-29431/" title="Open journal profile for Quarterly Journal of Economics">View profile</a></td>
+            </tr>
+<tr>
+              <td>
+                <div class="table-title">
+                  <a href="journals/nature-reviews-drug-discovery-20425/">Nature Reviews Drug Discovery</a>
+                </div>
+              </td>
+              <td>
+                <div class="table-publisher" title="Nature Research">Nature Research</div>
+                <div class="mini-meta" title="United Kingdom">United Kingdom</div>
+              </td>
+              <td>
+                <div class="topic-stack">
+                  <div class="topic-primary" title="Medicine; Pharmacology, Toxicology and Pharmaceutics">Medicine; Pharmacology, Toxicology and Pharmaceutics</div>
+                  <div class="topic-secondary" title="Drug Discovery (Q1); Medicine (miscellaneous) (Q1); Pharmacology (Q1)">Drug Discovery (Q1); Medicine (miscellaneous) (Q1); Pharmacology (Q1)</div>
+                </div>
+              </td>
+              <td><div class="status-row"><span class="label label-scopus">Scopus</span><span class="label label-wos">WoS</span></div></td>
+              <td><span class="pill pill-quartile">Q1</span></td>
+              <td><a class="table-action-link" href="journals/nature-reviews-drug-discovery-20425/" title="Open journal profile for Nature Reviews Drug Discovery">View profile</a></td>
+            </tr>
+<tr>
+              <td>
+                <div class="table-title">
+                  <a href="journals/nature-reviews-clinical-oncology-17700156734/">Nature Reviews Clinical Oncology</a>
+                </div>
+              </td>
+              <td>
+                <div class="table-publisher" title="Nature Publishing Group">Nature Publishing Group</div>
+                <div class="mini-meta" title="United Kingdom">United Kingdom</div>
+              </td>
+              <td>
+                <div class="topic-stack">
+                  <div class="topic-primary" title="Medicine">Medicine</div>
+                  <div class="topic-secondary" title="Oncology (Q1)">Oncology (Q1)</div>
+                </div>
+              </td>
+              <td><div class="status-row"><span class="label label-scopus">Scopus</span><span class="label label-wos">WoS</span></div></td>
+              <td><span class="pill pill-quartile">Q1</span></td>
+              <td><a class="table-action-link" href="journals/nature-reviews-clinical-oncology-17700156734/" title="Open journal profile for Nature Reviews Clinical Oncology">View profile</a></td>
+            </tr>
+<tr>
+              <td>
+                <div class="table-title">
+                  <a href="journals/american-economic-review-22697/">American Economic Review</a>
+                </div>
+              </td>
+              <td>
+                <div class="table-publisher" title="American Economic Association">American Economic Association</div>
+                <div class="mini-meta" title="United States">United States</div>
+              </td>
+              <td>
+                <div class="topic-stack">
+                  <div class="topic-primary" title="Economics, Econometrics and Finance">Economics, Econometrics and Finance</div>
+                  <div class="topic-secondary" title="Economics and Econometrics (Q1)">Economics and Econometrics (Q1)</div>
+                </div>
+              </td>
+              <td><div class="status-row"><span class="label label-scopus">Scopus</span><span class="label label-wos">WoS</span></div></td>
+              <td><span class="pill pill-quartile">Q1</span></td>
+              <td><a class="table-action-link" href="journals/american-economic-review-22697/" title="Open journal profile for American Economic Review">View profile</a></td>
+            </tr>
+<tr>
+              <td>
+                <div class="table-title">
+                  <a href="journals/nature-reviews-cancer-12464/">Nature Reviews Cancer</a>
+                </div>
+              </td>
+              <td>
+                <div class="table-publisher" title="Nature Publishing Group">Nature Publishing Group</div>
+                <div class="mini-meta" title="United Kingdom">United Kingdom</div>
+              </td>
+              <td>
+                <div class="topic-stack">
+                  <div class="topic-primary" title="Biochemistry, Genetics and Molecular Biology; Medicine">Biochemistry, Genetics and Molecular Biology; Medicine</div>
+                  <div class="topic-secondary" title="Cancer Research (Q1); Oncology (Q1)">Cancer Research (Q1); Oncology (Q1)</div>
+                </div>
+              </td>
+              <td><div class="status-row"><span class="label label-scopus">Scopus</span><span class="label label-wos">WoS</span></div></td>
+              <td><span class="pill pill-quartile">Q1</span></td>
+              <td><a class="table-action-link" href="journals/nature-reviews-cancer-12464/" title="Open journal profile for Nature Reviews Cancer">View profile</a></td>
+            </tr>
+<tr>
+              <td>
+                <div class="table-title">
+                  <a href="journals/journal-of-finance-17500/">Journal of Finance</a>
+                </div>
+              </td>
+              <td>
+                <div class="table-publisher" title="Wiley-Blackwell Publishing Ltd">Wiley-Blackwell Publishing Ltd</div>
+                <div class="mini-meta" title="United Kingdom">United Kingdom</div>
+              </td>
+              <td>
+                <div class="topic-stack">
+                  <div class="topic-primary" title="Business, Management and Accounting; Economics, Econometrics and Finance">Business, Management and Accounting; Economics, Econometrics and Finance</div>
+                  <div class="topic-secondary" title="Accounting (Q1); Economics and Econometrics (Q1); Finance (Q1)">Accounting (Q1); Economics and Econometrics (Q1); Finance (Q1)</div>
+                </div>
+              </td>
+              <td><div class="status-row"><span class="label label-scopus">Scopus</span><span class="label label-wos">WoS</span></div></td>
+              <td><span class="pill pill-quartile">Q1</span></td>
+              <td><a class="table-action-link" href="journals/journal-of-finance-17500/" title="Open journal profile for Journal of Finance">View profile</a></td>
+            </tr>
+<tr>
+              <td>
+                <div class="table-title">
+                  <a href="journals/foundations-and-trends-in-machine-learning-19300156903/">Foundations and Trends in Machine Learning</a>
+                </div>
+              </td>
+              <td>
+                <div class="table-publisher" title="Now Publishers Inc">Now Publishers Inc</div>
+                <div class="mini-meta" title="United States">United States</div>
+              </td>
+              <td>
+                <div class="topic-stack">
+                  <div class="topic-primary" title="Computer Science">Computer Science</div>
+                  <div class="topic-secondary" title="Artificial Intelligence (Q1); Human-Computer Interaction (Q1); Software (Q1)">Artificial Intelligence (Q1); Human-Computer Interaction (Q1); Software (Q1)</div>
+                </div>
+              </td>
+              <td><div class="status-row"><span class="label label-scopus">Scopus</span><span class="label label-wos">WoS</span></div></td>
+              <td><span class="pill pill-quartile">Q1</span></td>
+              <td><a class="table-action-link" href="journals/foundations-and-trends-in-machine-learning-19300156903/" title="Open journal profile for Foundations and Trends in Machine Learning">View profile</a></td>
+            </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="pagination">
+              <div class="pagination-info" id="pagination-info">Loading pagination…</div>
+              <div class="pagination-list" id="pagination-list"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <div class="shell footer-grid">
+        <div class="footer-note">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Licensed for use under CC BY-NC.</div>
+        <div class="footer-note">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
+      </div>
+    </footer>
+  </body>
+</html>
