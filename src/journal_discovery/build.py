@@ -544,7 +544,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
     <meta charset=\"utf-8\">
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
     <title>Journal Discovery | Match journal profiles from article abstracts</title>
-    <meta name=\"description\" content=\"Search and browse journal discovery data built from Scimago Journal Rank 2024, with abstract-to-journal matching based on journal categories and areas.\">
+    <meta name=\"description\" content=\"Search and browse journal discovery data built from the active Scimago Journal Rank snapshot, with abstract-to-journal matching based on journal categories and areas.\">
     <meta name=\"robots\" content=\"index,follow\">
     <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
     {maybe_canonical('')}
