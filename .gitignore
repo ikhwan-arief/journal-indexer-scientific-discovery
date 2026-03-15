@@ -1,6 +1,10 @@
 __pycache__/
-*.pyc
-.venv/
+*.py[cod]
+*.sqlite3
+*.db
+build/
 .env
 .DS_Store
-data/journal_indexer.db
+/data/.DS_Store
+docs/
+data/raw/doaj.csv
