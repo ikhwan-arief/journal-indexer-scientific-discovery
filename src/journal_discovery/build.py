@@ -636,7 +636,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
     </main>
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
-        <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Available under CC BY-NC.</div>
+        <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan[at]eng.unand.ac.id). Available under CC BY-NC.</div>
         <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
       </div>
     </footer>
@@ -750,7 +750,7 @@ def search_page_html(summary: SiteSummary) -> str:
     </main>
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
-        <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Available under CC BY-NC.</div>
+        <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan[at]eng.unand.ac.id). Available under CC BY-NC.</div>
         <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
       </div>
     </footer>
