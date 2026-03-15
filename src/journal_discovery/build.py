@@ -681,24 +681,6 @@ def search_page_html(summary: SiteSummary) -> str:
             <p class=\"eyebrow\">Advanced search</p>
             <h1>Search journal profiles with flexible filters.</h1>
             <p class=\"hero-copy\">Search by abstract, keywords, exact title, publisher, or URL fragment, then refine results by quartile, country, and index coverage. Abstract matching compares your text with each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
-            <div class=\"stats-grid\">
-              <div class=\"stat-card\">
-                <p class=\"stat-label\">Indexed journals</p>
-                <p class=\"stat-value\">{summary.total_journals:,}</p>
-              </div>
-              <div class=\"stat-card\">
-                <p class=\"stat-label\">WoS-linked journals</p>
-                <p class=\"stat-value\">{summary.total_wos:,}</p>
-              </div>
-              <div class=\"stat-card\">
-                <p class=\"stat-label\">DOAJ-linked journals</p>
-                <p class=\"stat-value\">{summary.total_doaj:,}</p>
-              </div>
-              <div class=\"stat-card\">
-                <p class=\"stat-label\">Profiles without external websites</p>
-                <p class=\"stat-value\">{summary.total_missing_websites:,}</p>
-              </div>
-            </div>
           </div>
         </div>
       </section>
