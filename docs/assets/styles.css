@@ -269,6 +269,20 @@ img {
   margin-top: 1.5rem;
 }
 
+.hero-actions-inline {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1rem;
+}
+
+.hero-actions-secondary {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding-left: clamp(1.5rem, 4vw, 3rem);
+}
+
 .abstract-search-form {
   margin-top: 1.5rem;
   padding: 1.15rem;
@@ -445,8 +459,15 @@ button:disabled {
 }
 
 .table-controls {
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 1.15rem;
+}
+
+.table-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .results-toolbar-actions {
@@ -574,6 +595,7 @@ tbody tr:last-child td {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
 }
 

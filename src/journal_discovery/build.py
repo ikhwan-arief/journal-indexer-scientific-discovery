@@ -641,36 +641,33 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
       <section class=\"hero\">
         <div class=\"shell\">
           <div class=\"hero-panel\">
-                  <div class="hero-content">
-                    <h1>Find journals by title, keyword, URL fragment, or article abstract.</h1>
-                    <p class="hero-copy">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
-                    <form class="abstract-search-form" action="search/" method="get">
-                      <input type="hidden" name="scope" value="abstract">
-                      <label class="field abstract-field" for="abstract-query">
-                        <span>Paste article abstract</span>
-                        <textarea id="abstract-query" name="q" rows="8" placeholder="Paste an article abstract. The app compares it with journal categories and subject areas to suggest relevant journals."></textarea>
-                      </label>
-                      <div class="hero-actions">
-                        <button type="submit">Find matching journals</button>
-                        <a class="button button-secondary" href="search/">Open advanced search</a>
-                      </div>
-                    </form>
-                    <div class="hero-actions">
-                      <a class="button button-secondary" href="#journal-table">Browse all journals</a>
-                    </div>
-                  </div>
-                  <div class="hero-image">
-                    <img src="assets/home.png" alt="Journal Discovery Illustration" loading="lazy" />
-                  </div>
+            <div class=\"hero-content\">
+              <h1>Find journals by title, keyword, URL fragment, or article abstract.</h1>
+              <p class=\"hero-copy\">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
+              <form class=\"abstract-search-form\" action=\"search/\" method=\"get\">
+                <input type=\"hidden\" name=\"scope\" value=\"abstract\">
+                <label class=\"field abstract-field\" for=\"abstract-query\">
+                  <span>Paste article abstract</span>
+                  <textarea id=\"abstract-query\" name=\"q\" rows=\"6\" placeholder=\"Paste an article abstract. The app compares it with journal categories and subject areas to suggest relevant journals.\"></textarea>
+                </label>
+                <div class=\"hero-actions-inline\">
+                  <button type=\"submit\" class=\"button button-primary\">Find matching journals</button>
+                  <a class=\"button button-secondary\" href=\"search/\">Open advanced search</a>
+                </div>
+              </form>
+            </div>
+          </div>
+          <div class=\"hero-actions-secondary\">
+            <a class=\"button button-secondary\" href=\"#journal-table\">Browse all journals</a>
           </div>
         </div>
       </section>
       <section class=\"section\">
         <div class=\"shell\" id=\"app-error\"></div>
         <div class=\"shell\">
-          <div class="section-heading section-heading-results">
+          <div class=\"section-heading section-heading-results\">
             <div>
-              <p class="eyebrow results-eyebrow">Journal directory</p>
+              <p class=\"eyebrow results-eyebrow\">JOURNAL DIRECTORY</p>
               <h2>Browse verified journal profiles</h2>
               <p class=\"table-note\">Index badges show whether a journal appears in Scopus, WoS, and DOAJ when available. The quartile column shows the best <strong>SJR quartile</strong> available in the source data.</p>
             </div>
@@ -678,24 +675,28 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
           </div>
           <div class=\"table-card\">
             <div class=\"table-controls\">
-              <div class="table-filter-pills">
-                <span class="table-pill">Scopus coverage</span>
-                <span class="table-pill">WoS cross-check</span>
-                <span class="table-pill">DOAJ enrichment</span>
+              <div class=\"table-filter-pills\">
+                <span class=\"table-pill\">Scopus coverage</span>
+                <span class=\"table-pill\">WoS cross-check</span>
+                <span class=\"table-pill\">DOAJ enrichment</span>
               </div>
-              <a class="button button-secondary table-cta-button" href="search/">Open advanced search</a>
-              <div class=\"table-chip\"><strong>10 journals</strong> per page</div>
+              <div class=\"table-controls-center\">
+                <a class=\"button button-secondary table-cta-button\" href=\"search/\">Open advanced search</a>
+              </div>
+              <div class=\"table-controls-right\">
+                <div class=\"table-chip\"><strong>10 journals</strong> per page</div>
+              </div>
             </div>
             <div class=\"table-wrap\">
               <table id=\"journal-table\">
                 <thead>
                   <tr>
-                    <th>Journal title</th>
-                    <th>Publisher</th>
-                    <th>Focus areas</th>
-                    <th>Indexed in</th>
-                    <th>Best SJR quartile</th>
-                    <th>Action</th>
+                    <th>JOURNAL TITLE</th>
+                    <th>PUBLISHER</th>
+                    <th>FOCUS AREAS</th>
+                    <th>INDEXED IN</th>
+                    <th>BEST SJR QUARTILE</th>
+                    <th>ACTION</th>
                   </tr>
                 </thead>
                 <tbody id=\"journal-table-body\">
@@ -772,11 +773,8 @@ def search_page_html(summary: SiteSummary) -> str:
                   </div>
                 </form>
                 <div class=\"hero-actions\">
-                  <a class=\"button button-secondary\" href=\"#journal-table\">Browse all journals</a>
+                  <a class=\"button button-secondary table-cta-button\" href=\"#journal-table\">Browse all journals</a>
                 </div>
-              </div>
-              <div class=\"hero-image\">
-                <img src=\"assets/home.png\" alt=\"Journal Discovery Illustration\" loading=\"lazy\" />
               </div>
             </div>
           </div>
