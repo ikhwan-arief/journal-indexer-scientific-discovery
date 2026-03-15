@@ -16,8 +16,8 @@ try:
 except ImportError as error:
     raise SystemExit(
         "Playwright is not installed. Run: \n"
-        '  "/Users/ikhwanarief/Documents/GitHub Repositories/.venv/bin/python" -m pip install -r requirements-dev.txt\n'
-        '  "/Users/ikhwanarief/Documents/GitHub Repositories/.venv/bin/python" -m playwright install chromium'
+        '  python -m pip install -r requirements-dev.txt\n'
+        '  python -m playwright install chromium'
     ) from error
 
 

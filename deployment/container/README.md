@@ -27,6 +27,7 @@ Recommended production flow:
 - `Dockerfile`: multi-stage image that builds the site and serves it with Nginx
 - `nginx.conf`: minimal static-site Nginx config with a health endpoint
 - `docker-compose.yml.example`: ready-to-edit Compose example for a single-server deployment
+- `.env.example`: template for the deployment-specific values used by Docker Compose
 
 ## Prerequisites
 
@@ -41,6 +42,33 @@ Before building the container on the server, make sure:
    - `doaj.csv`
 
 If `doaj.csv` is missing, the site still builds, but DOAJ-derived website, APC, and license enrichment will be reduced.
+
+## Recommended server layout
+
+For a clean single-server deployment, keep the clone and the compose files in a dedicated application directory.
+
+Example:
+
+```bash
+sudo mkdir -p /opt/journal-discovery
+sudo chown "$USER":"$USER" /opt/journal-discovery
+cd /opt/journal-discovery
+git clone https://github.com/ikhwan-arief/journal-indexer-scientific-discovery.git .
+```
+
+After cloning:
+
+1. place the required CSV files in `data/raw/`
+1. copy `deployment/container/.env.example` to `deployment/container/.env`
+1. update the values in `.env` for the real domain, image name, and published port
+
+Example:
+
+```bash
+cp deployment/container/.env.example deployment/container/.env
+```
+
+The `.env` file is meant to hold deployment-specific values only. Source data still lives in `data/raw/`.
 
 ## Option A: Build and run with Docker
 
@@ -64,6 +92,13 @@ Notes:
 - `SITE_URL` is optional, but recommended because the generator uses it for canonical tags and `sitemap.xml`.
 - The build uses the current CSV files from `data/raw/` inside the repository.
 
+If you are deploying on a small VM and want to confirm the build output before starting the runtime container, inspect the image metadata and recent build logs:
+
+```bash
+docker image ls journal-discovery
+docker history journal-discovery:latest
+```
+
 ### 2. Run the container
 
 ```bash
@@ -77,6 +112,8 @@ docker run -d \
 This publishes the site on port `8080` of the server.
 
 If you already have a reverse proxy on the server, point it to `http://127.0.0.1:8080`.
+
+If you do not use a reverse proxy yet, you can temporarily expose the site directly on a public port like `80:80`, but that is not recommended for long-term production use because TLS termination and routing are harder to manage.
 
 ### 3. Verify the container
 
@@ -102,15 +139,28 @@ This is the better option if you want a repeatable single-server deployment file
 
 ```bash
 cp deployment/container/docker-compose.yml.example deployment/container/docker-compose.yml
+cp deployment/container/.env.example deployment/container/.env
 ```
 
 ### 2. Edit the Compose file
 
-Update at least these values:
+The Compose file now reads deployment values from `deployment/container/.env`.
+
+Update at least these values in `.env`:
 
 - `SITE_URL`
-- published port if you do not want `8080`
-- image tag or container name if needed
+- `HOST_PORT` if you do not want `8080`
+- `IMAGE_NAME` if you want versioned tags
+- `CONTAINER_NAME` if needed
+
+Example `.env`:
+
+```dotenv
+SITE_URL=https://journals.example.com
+IMAGE_NAME=journal-discovery:2026-03-15
+CONTAINER_NAME=journal-discovery
+HOST_PORT=8080
+```
 
 ### 3. Start the service
 
@@ -123,7 +173,20 @@ docker compose -f deployment/container/docker-compose.yml up -d --build
 ```bash
 docker compose -f deployment/container/docker-compose.yml ps
 docker compose -f deployment/container/docker-compose.yml logs --tail=100
+curl -I http://127.0.0.1:8080/
+curl http://127.0.0.1:8080/healthz
 ```
+
+### 5. Make Compose start on boot
+
+If Docker is already enabled on the server, `restart: unless-stopped` is usually enough. To be explicit on Debian/Ubuntu systems:
+
+```bash
+sudo systemctl enable docker
+sudo systemctl start docker
+```
+
+If you later want Compose itself wrapped in a systemd service, add that as a host-level operational step, not inside the container.
 
 ## Reverse proxy and TLS
 
@@ -139,6 +202,24 @@ Example public flow:
 - reverse proxy -> `http://journal-discovery:80`
 
 If your reverse proxy is on the same host and not inside Docker, forwarding to `http://127.0.0.1:8080` is enough.
+
+Minimal Nginx reverse proxy example on the host:
+
+```nginx
+server {
+  listen 80;
+  server_name journals.example.com;
+
+  location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+```
+
+After this works, add TLS with your normal certificate flow, for example Let's Encrypt.
 
 ## Updating the deployment
 
@@ -174,6 +255,8 @@ Example with Compose:
 docker compose -f deployment/container/docker-compose.yml up -d --build
 ```
 
+If you use versioned image tags in `.env`, update `IMAGE_NAME` first, then run the same Compose command.
+
 ## Rollback strategy
 
 For safer operations, tag each image with a release identifier instead of using only `latest`.
@@ -189,6 +272,12 @@ docker build \
 ```
 
 If a deployment is bad, restart the server with the previous working tag.
+
+A practical pattern is:
+
+1. keep yesterday's known-good image tag available locally
+1. assign each rollout a dated tag
+1. only remove older tags after the new deployment passes verification
 
 ## Storage and persistence
 
@@ -213,6 +302,18 @@ This follows the same verification pattern already used after GitHub Pages deplo
 1. verify the built content
 1. verify the deployed service is healthy
 1. verify the public site shows the expected text
+
+## Suggested deployment checklist
+
+Use this sequence for routine updates on a server:
+
+1. `git pull origin main`
+1. refresh `data/raw/` if source files changed
+1. review `deployment/container/.env`
+1. run `docker compose -f deployment/container/docker-compose.yml up -d --build`
+1. run the local container checks on `127.0.0.1`
+1. run the public URL checks on the real domain
+1. keep the previous image tag until the rollout is confirmed healthy
 
 ## Operational notes
 
