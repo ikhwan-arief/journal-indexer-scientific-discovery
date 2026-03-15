@@ -570,7 +570,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
         <div class=\"shell\">
           <div class=\"hero-panel\">
             <h1>Find journals by title, keyword, URL fragment, or article abstract.</h1>
-              <p class=\"hero-copy\">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
+            <p class=\"hero-copy\">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
             <form class=\"abstract-search-form\" action=\"search/\" method=\"get\">
               <input type=\"hidden\" name=\"scope\" value=\"abstract\">
               <label class=\"field abstract-field\" for=\"abstract-query\">
@@ -583,7 +583,6 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
               </div>
             </form>
             <div class=\"hero-actions\">
-              <a class=\"button button-primary\" href=\"search/\">Open search experience</a>
               <a class=\"button button-secondary\" href=\"#journal-table\">Browse all journals</a>
             </div>
           </div>
@@ -596,7 +595,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
             <div>
               <p class="eyebrow results-eyebrow">Journal directory</p>
               <h2>Browse verified journal profiles</h2>
-              <p class=\"table-note\">Index badges show whether a journal appears in Scopus, WoS, and DOAJ when available. The SJR column uses the best <strong>SJR Quartile</strong> provided in the source data.</p>
+              <p class=\"table-note\">Index badges show whether a journal appears in Scopus, WoS, and DOAJ when available. The quartile column shows the best <strong>SJR quartile</strong> available in the source data.</p>
             </div>
             <div class=\"table-chip\" id=\"home-summary\">Journal directory</div>
           </div>
@@ -618,7 +617,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
                     <th>Publisher</th>
                     <th>Focus areas</th>
                     <th>Indexed in</th>
-                    <th>SJR quartile</th>
+                    <th>Best SJR quartile</th>
                     <th>Action</th>
                   </tr>
                 </thead>
@@ -653,7 +652,7 @@ def search_page_html(summary: SiteSummary) -> str:
     <meta charset=\"utf-8\">
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
     <title>Search Journal Profiles | Journal Discovery</title>
-    <meta name=\"description\" content=\"Search journal profiles by abstract, keyword, full title, publisher, URL fragment, country, indexing status, or SJR quartile.\">
+    <meta name=\"description\" content=\"Search journal profiles by abstract, keyword, full title, publisher, URL fragment, country, indexing status, or best SJR quartile.\">
     <meta name=\"robots\" content=\"index,follow\">
     <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
     {maybe_canonical('search/')}
@@ -773,8 +772,8 @@ def profile_page_html(record: JournalRecord) -> str:
     ("Country", record.country or NOT_AVAILABLE),
     ("Region", record.region or NOT_AVAILABLE),
         ("Indexed In", record.index_summary),
-    ("SJR Best Quartile", record.sjr_best_quartile or NOT_AVAILABLE),
-    ("SJR Quartile (table view)", record.sjr_quartile or NOT_AVAILABLE),
+    ("Best SJR Quartile", record.sjr_best_quartile or NOT_AVAILABLE),
+    ("Directory Quartile Label", record.sjr_quartile or NOT_AVAILABLE),
     ("APC Status", record.apc_status or NOT_AVAILABLE),
     ("License", record.license or NOT_AVAILABLE),
     ("Author Holds Copyright", record.author_holds_copyright or NOT_AVAILABLE),
@@ -857,11 +856,11 @@ def profile_page_html(record: JournalRecord) -> str:
                   <div class=\"field-value\">{html.escape(record.sourceid)}</div>
                 </div>
                 <div class=\"detail-item\">
-                  <div class=\"field-name\">Front-page quartile column</div>
+                  <div class=\"field-name\">Directory Quartile Label</div>
                   <div class="field-value">{html.escape(record.sjr_quartile or NOT_AVAILABLE)}</div>
                 </div>
                 <div class=\"detail-item\">
-                  <div class=\"field-name\">Best quartile shown on profile</div>
+                  <div class=\"field-name\">Best SJR Quartile</div>
                   <div class="field-value">{html.escape(record.sjr_best_quartile or NOT_AVAILABLE)}</div>
                 </div>
                 <div class=\"detail-item\">

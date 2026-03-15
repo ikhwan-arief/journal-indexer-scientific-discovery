@@ -74,13 +74,9 @@ function createLabelRow(record) {
 
 function createTitleLink(record, siteRoot) {
   const link = document.createElement("a");
-  const href = record.journal_url || joinRelative(siteRoot, record.profile_path);
-  link.href = href;
+  link.href = joinRelative(siteRoot, record.profile_path);
   link.textContent = record.title;
-  if (record.journal_url) {
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-  }
+  link.title = `Open journal profile for ${record.title}`;
   return link;
 }
 
@@ -317,6 +313,48 @@ function createInsightBox(insight, score) {
   const fieldLabel = insight.fields.length ? insight.fields.join(" and ") : "journal topics";
   description.textContent = `Matched terms found in ${fieldLabel}: ${insight.terms.join(", ")}.`;
   wrapper.appendChild(description);
+
+  return wrapper;
+}
+
+function createResultSummary(record) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "result-summary";
+
+  const summaryItems = [
+    `Publisher: ${safeText(record.publisher)}`,
+    `Country: ${safeText(record.country)}`,
+    `Best quartile: ${safeText(record.sjr_best_quartile, DASH_MARK)}`,
+  ];
+
+  if (record.index_summary) {
+    summaryItems.push(`Indexed in: ${record.index_summary}`);
+  }
+
+  wrapper.textContent = summaryItems.join(" • ");
+  return wrapper;
+}
+
+function createSearchActions(record, siteRoot) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "search-card-actions";
+
+  const profileLink = document.createElement("a");
+  profileLink.className = "table-action-link";
+  profileLink.href = joinRelative(siteRoot, record.profile_path);
+  profileLink.textContent = "Open profile";
+  profileLink.title = `Open the profile page for ${record.title}`;
+  wrapper.appendChild(profileLink);
+
+  if (record.journal_url) {
+    const websiteLink = document.createElement("a");
+    websiteLink.className = "button button-secondary";
+    websiteLink.href = record.journal_url;
+    websiteLink.target = "_blank";
+    websiteLink.rel = "noopener noreferrer";
+    websiteLink.textContent = "Visit journal website";
+    wrapper.appendChild(websiteLink);
+  }
 
   return wrapper;
 }
@@ -649,8 +687,10 @@ function renderSearchPage(manifest, siteRoot) {
 
       const meta = document.createElement("p");
       meta.className = "profile-meta";
-      meta.textContent = `Rank ${safeText(record.rank, "-")} · Publisher ${safeText(record.publisher)} · Country ${safeText(record.country)}`;
+      meta.textContent = `Rank ${safeText(record.rank, "-")}`;
       article.appendChild(meta);
+
+      article.appendChild(createResultSummary(record));
 
       if (scope === "abstract") {
         const insight = abstractInsight(record, rawQuery);
@@ -669,25 +709,17 @@ function renderSearchPage(manifest, siteRoot) {
       main.appendChild(buildDetailItem("Areas", record.areas));
       main.appendChild(buildDetailItem("APC Status", record.apc_status));
       main.appendChild(buildDetailItem("License", record.license));
-      main.appendChild(buildDetailItem("Author Holds Copyright", record.author_holds_copyright));
-      main.appendChild(buildDetailItem("SJR Best Quartile", record.sjr_best_quartile));
       layout.appendChild(main);
 
       const side = document.createElement("aside");
       side.className = "profile-side detail-grid";
-      side.appendChild(buildDetailItem("Indexed In", record.index_summary));
+      side.appendChild(buildDetailItem("Best SJR Quartile", record.sjr_best_quartile));
+      side.appendChild(buildDetailItem("Author Holds Copyright", record.author_holds_copyright));
       side.appendChild(buildDetailItem("ISSN", (record.issns || []).join(", ")));
-      side.appendChild(
-        buildNavigationDetailItem(
-          "Profile Page",
-          joinRelative(siteRoot, record.profile_path),
-          "Visit the profile page",
-          `Open the profile page for ${record.title}`
-        )
-      );
       layout.appendChild(side);
 
       article.appendChild(layout);
+      article.appendChild(createSearchActions(record, siteRoot));
       results.appendChild(article);
     }
 

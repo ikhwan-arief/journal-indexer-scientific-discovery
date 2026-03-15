@@ -752,6 +752,13 @@ tbody tr:last-child td {
   color: var(--ink);
 }
 
+.result-summary {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  line-height: 1.7;
+  font-size: 0.95rem;
+}
+
 .search-card h3,
 .profile-card h2 {
   margin: 0;
@@ -763,6 +770,18 @@ tbody tr:last-child td {
   flex-direction: column;
   gap: 0.35rem;
   margin-bottom: 1rem;
+}
+
+.search-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.search-card-actions .button,
+.search-card-actions .table-action-link {
+  padding-inline: 1rem;
 }
 
 .profile-layout {
