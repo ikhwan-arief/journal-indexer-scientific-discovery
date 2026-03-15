@@ -134,6 +134,7 @@ function prepareRecords(records) {
 }
 
 function renderHomePage(records, siteRoot) {
+  const table = document.querySelector("#journal-table");
   const tbody = document.querySelector("#journal-table-body");
   const summary = document.querySelector("#home-summary");
   const paginationInfo = document.querySelector("#pagination-info");
@@ -146,7 +147,16 @@ function renderHomePage(records, siteRoot) {
     summary.textContent = `${records.length.toLocaleString("en-US")} journals in the directory.`;
   }
 
-  function goToPage(nextPage) {
+  function scrollHomeTableToTop() {
+    const scrollTarget = table || tbody;
+    if (!scrollTarget) {
+      return;
+    }
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    scrollTarget.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
+  }
+
+  function goToPage(nextPage, shouldScroll = false) {
     page = Math.min(Math.max(nextPage, 1), totalPages);
     const start = (page - 1) * perPage;
     const pageItems = records.slice(start, start + perPage);
@@ -236,9 +246,13 @@ function renderHomePage(records, siteRoot) {
         if (item.current) {
           button.setAttribute("aria-current", "page");
         }
-        button.addEventListener("click", () => goToPage(item.page));
+        button.addEventListener("click", () => goToPage(item.page, true));
         paginationList.appendChild(button);
       }
+    }
+
+    if (shouldScroll) {
+      window.requestAnimationFrame(scrollHomeTableToTop);
     }
   }
 
