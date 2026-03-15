@@ -688,10 +688,6 @@ function renderProfilePage(record, siteRoot) {
   section.appendChild(shell);
   root.appendChild(section);
 
-  const footerMeta = document.querySelector("#profile-footer-meta");
-  if (footerMeta) {
-    footerMeta.textContent = `Source ID ${safeText(record.sourceid, "-")} · Rank ${safeText(record.rank, "-")}`;
-  }
 }
 
 async function renderDynamicProfile(profileIndex, siteRoot) {
