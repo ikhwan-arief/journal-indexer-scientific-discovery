@@ -581,7 +581,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
           <div class=\"section-heading\">
             <div>
               <h2>Front-page journal table</h2>
-              <p class=\"table-note\">Every row originates from <strong>scimagojr 2024.csv</strong>. The check symbols mark whether the journal exists in the Scopus baseline, the WoS subset, and the current DOAJ enrichment snapshot when available. The SJR column uses the available <strong>SJR Best Quartile</strong> field from the source dataset.</p>
+              <p class=\"table-note\">The check symbols mark whether the journal exists in the Scopus, the WoS, and the DOAJ when available. The SJR column uses the available <strong>SJR Best Quartile</strong> field from the source dataset.</p>
             </div>
             <div class=\"table-chip\" id=\"home-summary\">Preparing journal table…</div>
           </div>
@@ -618,8 +618,8 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
     </main>
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
-        <div class=\"footer-note\">Generated {html.escape(summary.generated_at)} from Scimago JR 2024, the WoS subset, and optional DOAJ enrichment when a DOAJ CSV snapshot is available.</div>
-        <div class=\"footer-note\">Secure static deployment target: GitHub Pages</div>
+        <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Licensed for use under CC BY-NC.</div>
+        <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
       </div>
     </footer>
   </body>
@@ -751,8 +751,8 @@ def search_page_html(summary: SiteSummary) -> str:
     </main>
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
-        <div class=\"footer-note\">Result cards intentionally keep fields visible even when source metadata is not yet available, so every journal still has a public profile surface.</div>
-        <div class=\"footer-note\">Generated {html.escape(summary.generated_at)}</div>
+        <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan@eng.unand.ac.id). Licensed for use under CC BY-NC.</div>
+        <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
       </div>
     </footer>
   </body>
