@@ -2,8 +2,7 @@ const CHECK_MARK = "✓";
 const DASH_MARK = "—";
 const ABSTRACT_STOP_WORDS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "into", "is", "it", "of", "on", "or", "that", "the", "their", "this", "to", "with",
-  "using", "used", "use", "we", "our", "was", "were", "which", "while", "within", "without", "can", "may", "than", "then", "these", "those",
-  "yang", "dan", "atau", "dari", "untuk", "dengan", "dalam", "pada", "adalah", "oleh", "sebagai", "kami", "kita", "ini", "itu", "terhadap"
+  "using", "used", "use", "we", "our", "was", "were", "which", "while", "within", "without", "can", "may", "than", "then", "these", "those"
 ]);
 
 function normalizeText(value) {
