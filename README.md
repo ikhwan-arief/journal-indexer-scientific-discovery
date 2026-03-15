@@ -5,8 +5,8 @@ Journal Discovery is a static journal discovery website designed for public host
 ## Current implementation
 
 - Uses Python and SQLite during the build step only.
-- Reads Scimago Journal Rank 2024 from `data/raw/scimagojr 2024.csv`.
-- Reads the WoS subset from `data/raw/scimagojr 2024_WoS.csv`.
+- Reads the active Scimago Journal Rank snapshot from `data/raw/scimagojr.csv`.
+- Reads the active WoS subset from `data/raw/scimagojr_wos.csv`.
 - Optionally reads DOAJ enrichment from `data/raw/doaj.csv`.
 - Generates a public static site into `docs/`.
 - Writes a lightweight `docs/data/home.json` for the front page plus a `docs/data/search-manifest.json` and sharded `docs/data/search-chunks/` files for on-demand search loading, with title-prefix shard hints so title searches can fetch fewer chunks first.
@@ -17,7 +17,7 @@ Journal Discovery is a static journal discovery website designed for public host
 - Shows the SJR quartile on the front-page table.
 - Shows the `SJR Best Quartile` on each journal profile page.
 - Exposes a search page for abstract, keyword, title, URL fragment, country, index filter, and quartile filter.
-- Scores abstract matching from the journal `Categories` and `Areas` fields in `scimagojr 2024.csv`.
+- Scores abstract matching from the journal `Categories` and `Areas` fields in `scimagojr.csv`.
 - Shows `Categories` and `Areas` on journal profile pages and on the search result profile cards.
 - Fills journal website, APC status, license, and copyright fields from DOAJ when a journal matches by ISSN or unique exact title.
 

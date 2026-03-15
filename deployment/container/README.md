@@ -35,11 +35,8 @@ Before building the container on the server, make sure:
 
 1. Docker Engine is installed.
 1. Docker Compose is available via `docker compose`.
-1. The required CSV files already exist in `data/raw/`:
-   - `scimagojr 2024.csv`
-   - `scimagojr 2024_WoS.csv`
-1. The optional DOAJ file exists if you want DOAJ enrichment:
-   - `doaj.csv`
+1. The required CSV files already exist in `data/raw/`: `scimagojr.csv` and `scimagojr_wos.csv`.
+1. The optional DOAJ file exists if you want DOAJ enrichment: `doaj.csv`.
 
 If `doaj.csv` is missing, the site still builds, but DOAJ-derived website, APC, and license enrichment will be reduced.
 
