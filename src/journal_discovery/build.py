@@ -561,7 +561,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
         </a>
         <nav class=\"top-nav\" aria-label=\"Primary\">
           <a href=\"./\">Browse journals</a>
-          <a href=\"search/\">Search profiles</a>
+          <a href=\"search/\">Search journal profiles</a>
         </nav>
       </div>
     </header>
@@ -669,7 +669,7 @@ def search_page_html(summary: SiteSummary) -> str:
         </a>
         <nav class=\"top-nav\" aria-label=\"Primary\">
           <a href=\"../\">Browse journals</a>
-          <a href=\"./\">Search profiles</a>
+          <a href=\"./\">Search journal profiles</a>
         </nav>
       </div>
     </header>
@@ -813,7 +813,7 @@ def profile_page_html(record: JournalRecord) -> str:
         </a>
         <nav class=\"top-nav\" aria-label=\"Primary\">
           <a href=\"../../\">Browse journals</a>
-          <a href=\"../../search/\">Search profiles</a>
+          <a href=\"../../search/\">Search journal profiles</a>
         </nav>
       </div>
     </header>
