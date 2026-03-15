@@ -404,6 +404,35 @@ function buildDetailItem(label, value, siteRoot, isLink = false) {
   return wrapper;
 }
 
+function buildNavigationDetailItem(label, href, linkText, titleText) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "detail-item";
+
+  const name = document.createElement("div");
+  name.className = "field-name";
+  name.textContent = label;
+  wrapper.appendChild(name);
+
+  const field = document.createElement("div");
+  field.className = "field-value";
+
+  if (href) {
+    const link = document.createElement("a");
+    link.href = href;
+    link.textContent = linkText;
+    if (titleText) {
+      link.title = titleText;
+    }
+    field.appendChild(link);
+  } else {
+    field.textContent = safeText(null);
+    field.classList.add("field-value-muted");
+  }
+
+  wrapper.appendChild(field);
+  return wrapper;
+}
+
 function renderSearchPage(manifest, siteRoot) {
   const form = document.querySelector("#search-form");
   const results = document.querySelector("#search-results");
@@ -471,15 +500,15 @@ function renderSearchPage(manifest, siteRoot) {
       const totalProfiles = Number(manifest.summary?.total_journals || 0).toLocaleString("en-US");
       const titleScoped = scopeSelect.value === "title" && queryInput.value.trim();
       resultsCount.textContent = titleScoped
-        ? `Loading title-matched shards from ${totalProfiles} journal profiles…`
-        : `Loading ${totalProfiles} journal profiles…`;
+        ? `${totalProfiles} journal profiles`
+        : `${totalProfiles} journal profiles`;
       const loading = document.createElement("div");
       loading.className = "empty-state";
       const title = document.createElement("strong");
-      title.textContent = "Loading search dataset";
+      title.textContent = "Please wait";
       loading.appendChild(title);
       const body = document.createElement("span");
-      body.textContent = "Loading journal shards for search and filtering.";
+      body.textContent = "Results are being prepared.";
       loading.appendChild(body);
       results.replaceChildren(loading);
     }
@@ -559,17 +588,17 @@ function renderSearchPage(manifest, siteRoot) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
     const title = document.createElement("strong");
-    title.textContent = "Search data loads on demand.";
+    title.textContent = "Start your search";
     empty.appendChild(title);
     const body = document.createElement("span");
-    body.textContent = `Enter a query or apply a filter to load ${Number(manifest.summary?.total_journals || 0).toLocaleString("en-US")} journal profiles.`;
+    body.textContent = "Search by abstract, keyword, title, publisher, country, or URL fragment.";
     empty.appendChild(body);
     results.appendChild(empty);
     if (resultsCount) {
       resultsCount.textContent = `${Number(manifest.summary?.total_journals || 0).toLocaleString("en-US")} profiles available.`;
     }
     if (paginationInfo) {
-      paginationInfo.textContent = "Pagination appears after results load.";
+      paginationInfo.textContent = "";
     }
     if (paginationList) {
       paginationList.replaceChildren();
@@ -648,7 +677,14 @@ function renderSearchPage(manifest, siteRoot) {
       side.className = "profile-side detail-grid";
       side.appendChild(buildDetailItem("Indexed In", record.index_summary));
       side.appendChild(buildDetailItem("ISSN", (record.issns || []).join(", ")));
-      side.appendChild(buildDetailItem("Profile Page", window.location.origin ? `${window.location.origin}${joinRelative(siteRoot, record.profile_path).replace(/^\./, "")}` : joinRelative(siteRoot, record.profile_path)));
+      side.appendChild(
+        buildNavigationDetailItem(
+          "Profile Page",
+          joinRelative(siteRoot, record.profile_path),
+          "Visit the profile page",
+          `Open the profile page for ${record.title}`
+        )
+      );
       layout.appendChild(side);
 
       article.appendChild(layout);

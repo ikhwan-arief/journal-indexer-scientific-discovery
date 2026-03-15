@@ -598,7 +598,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
               <h2>Browse verified journal profiles</h2>
               <p class=\"table-note\">Index badges show whether a journal appears in Scopus, WoS, and DOAJ when available. The SJR column uses the best <strong>SJR Quartile</strong> provided in the source data.</p>
             </div>
-            <div class=\"table-chip\" id=\"home-summary\">Loading journal directory…</div>
+            <div class=\"table-chip\" id=\"home-summary\">Journal directory</div>
           </div>
           <div class=\"table-card\">
             <div class=\"table-controls\">
@@ -628,7 +628,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
               </table>
             </div>
             <div class=\"pagination\">
-              <div class=\"pagination-info\" id=\"pagination-info\">Loading pagination…</div>
+              <div class=\"pagination-info\" id=\"pagination-info\"></div>
               <div class=\"pagination-list\" id=\"pagination-list\"></div>
             </div>
           </div>
@@ -739,12 +739,11 @@ def search_page_html(summary: SiteSummary) -> str:
             </form>
           </div>
           <div class=\"results-toolbar\">
-            <div class=\"results-count\" id=\"results-count\">Loading profiles…</div>
-            <div class=\"table-chip\">Static site runtime</div>
+            <div class=\"results-count\" id=\"results-count\">Journal profiles</div>
           </div>
           <div class=\"search-results\" id=\"search-results\"></div>
           <div class=\"pagination\">
-            <div class=\"pagination-info\" id=\"search-pagination-info\">Loading pagination…</div>
+            <div class=\"pagination-info\" id=\"search-pagination-info\"></div>
             <div class=\"pagination-list\" id=\"search-pagination-list\"></div>
           </div>
         </div>
@@ -832,7 +831,7 @@ def profile_page_html(record: JournalRecord) -> str:
           <div class=\"hero-panel\">
             <p class=\"eyebrow\">Journal profile</p>
             <h1>{html.escape(record.title)}</h1>
-            <p class=\"profile-copy\">This profile is generated from the current public data snapshot. When a DOAJ match is available, website, APC, license, and copyright details are filled from that source. Unavailable fields remain visible for consistency.</p>
+            <p class=\"profile-copy\">This page brings together journal details, indexing labels, and access information when available.</p>
             <div class=\"label-row\">{render_index_labels(record)}</div>
             <div class=\"profile-links\">
               <a class=\"button button-secondary\" href=\"../../search/?q={search_query}&scope=title\">Search similar journals</a>
@@ -867,7 +866,7 @@ def profile_page_html(record: JournalRecord) -> str:
                 </div>
                 <div class=\"detail-item\">
                   <div class=\"field-name\">Data note</div>
-                  <div class=\"field-value\">Website, APC, license, and copyright details come from the current DOAJ snapshot when a journal match is available.</div>
+                  <div class=\"field-value\">Website, APC, license, and copyright details are shown when available.</div>
                 </div>
               </aside>
             </div>
@@ -877,7 +876,7 @@ def profile_page_html(record: JournalRecord) -> str:
     </main>
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
-        <div class=\"footer-note\">Static profile page for public access.</div>
+        <div class=\"footer-note\">Journal profile</div>
         <div class=\"footer-note\">Source ID {html.escape(record.sourceid)} · Rank {record.rank}</div>
       </div>
     </footer>
