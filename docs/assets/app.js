@@ -513,18 +513,33 @@ function scoreRecord(record, query, scope) {
   return preciseScopeScore(record, query, scope);
 }
 
-function createInsightBox(insight, score) {
+function abstractFitPercentage(score, query) {
+  if (!query?.tokens?.length) {
+    return 0;
+  }
+  const maxScore = (query.tokens.length * 44) + 90;
+  if (!maxScore) {
+    return 0;
+  }
+  return Math.max(0, Math.min(100, Math.round((score / maxScore) * 100)));
+}
+
+function createInsightBox(insight, fitPercentage) {
   const wrapper = document.createElement("div");
   wrapper.className = "match-insight";
 
   const heading = document.createElement("strong");
-  heading.textContent = `Abstract fit score: ${Math.round(score)}`;
+  heading.textContent = `Abstract fit: ${fitPercentage}%`;
   wrapper.appendChild(heading);
 
   const description = document.createElement("span");
   const fieldLabel = insight.fields.length ? insight.fields.join(" and ") : "journal topics";
   description.textContent = `Matched terms found in ${fieldLabel}: ${insight.terms.join(", ")}.`;
   wrapper.appendChild(description);
+
+  const guidance = document.createElement("span");
+  guidance.textContent = "100% means the meaningful abstract terms align very strongly with this journal's Categories and Areas for the current search. Around 56% means moderate overlap: several terms match well, but the topic fit is still partial. Compare this percentage within the current search only; it is not a journal quality metric.";
+  wrapper.appendChild(guidance);
 
   return wrapper;
 }
@@ -1160,13 +1175,6 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
 
       article.appendChild(createResultSummary(record));
 
-      if (state.scope === "abstract") {
-        const insight = abstractInsight(record, state.query);
-        if (insight) {
-          article.appendChild(createInsightBox(insight, score));
-        }
-      }
-
       const layout = document.createElement("div");
       layout.className = "profile-layout";
 
@@ -1184,6 +1192,12 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
       side.appendChild(buildDetailItem("Best SJR Quartile", record.sjr_best_quartile));
       side.appendChild(buildDetailItem("Author Holds Copyright", record.author_holds_copyright));
       side.appendChild(buildDetailItem("ISSN", (record.issns || []).join(", ")));
+      if (state.scope === "abstract") {
+        const insight = abstractInsight(record, state.query);
+        if (insight) {
+          side.appendChild(createInsightBox(insight, abstractFitPercentage(score, state.query)));
+        }
+      }
       layout.appendChild(side);
 
       article.appendChild(layout);
