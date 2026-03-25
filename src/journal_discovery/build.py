@@ -38,8 +38,11 @@ class JournalRecord:
     coverage: str | None
     categories: str | None
     areas: str | None
+    sjr_value: float | None
+    sjr_display: str | None
     sjr_quartile: str | None
     sjr_best_quartile: str | None
+    h_index: int | None
     scopus_indexed: bool
     wos_indexed: bool
     doaj_indexed: bool
@@ -116,8 +119,11 @@ class JournalRecord:
             "coverage": self.coverage,
             "categories": self.categories,
             "areas": self.areas,
+            "sjr_value": self.sjr_value,
+            "sjr_display": self.sjr_display,
             "sjr_quartile": self.sjr_quartile,
             "sjr_best_quartile": self.sjr_best_quartile,
+            "h_index": self.h_index,
             "wos_indexed": self.wos_indexed,
             "doaj_indexed": self.doaj_indexed,
             "journal_url": self.journal_url,
@@ -202,6 +208,24 @@ def normalize_yes_no(value: str | None) -> str | None:
     if cleaned == "no":
         return "No"
     return (value or "").strip() or None
+
+
+def parse_decimal_metric(value: str | None) -> float | None:
+    cleaned = (value or "").strip()
+    if not cleaned:
+        return None
+    normalized = cleaned.replace(".", "").replace(",", ".")
+    try:
+        return float(normalized)
+    except ValueError:
+        return None
+
+
+def parse_int_metric(value: str | None) -> int | None:
+    cleaned = re.sub(r"[^0-9]", "", (value or "").strip())
+    if not cleaned:
+        return None
+    return int(cleaned)
 
 
 def build_apc_status(value: str | None, amount: str | None) -> str | None:
@@ -327,8 +351,11 @@ def build_records() -> list[JournalRecord]:
             coverage=(row.get("Coverage") or "").strip() or None,
             categories=(row.get("Categories") or "").strip() or None,
             areas=(row.get("Areas") or "").strip() or None,
+            sjr_value=parse_decimal_metric(row.get("SJR")),
+            sjr_display=(row.get("SJR") or "").strip() or None,
             sjr_quartile=quartile,
             sjr_best_quartile=quartile,
+            h_index=parse_int_metric(row.get("H index")),
             scopus_indexed=True,
             wos_indexed=sourceid in wos_sourceids,
             doaj_indexed=doaj_record is not None,
@@ -642,8 +669,8 @@ def home_page_html(summary: SiteSummary) -> str:
           </div>
         </div>
       </section>
-      <section class=\"section\">
-        <div class=\"shell\" id=\"app-error\"></div>
+      <div class=\"shell\" id=\"app-error\"></div>
+      <section class=\"section\" id=\"results-section\" hidden>
         <div class=\"shell\">
           <div class=\"section-heading section-heading-results\">
             <div>
@@ -711,7 +738,7 @@ def search_page_html(summary: SiteSummary) -> str:
           </div>
         </div>
       </section>
-      <section class=\"section\">
+      <section class=\"section\" id=\"results-section\">
         <div class=\"shell\" id=\"app-error\"></div>
         <div class=\"shell\">
           <div class=\"section-heading section-heading-results\">

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import socketserver
 import sys
 import threading
@@ -96,6 +97,13 @@ def submit_search(page, query: str, scope: str | None = None) -> None:
     wait_for_results(page)
 
 
+def parse_sjr(summary_text: str) -> float:
+    match = re.search(r"SJR:\s*([0-9][0-9,]*)", summary_text)
+    if not match:
+        raise AssertionError(f"Could not parse SJR from summary text: {summary_text}")
+    return float(match.group(1).replace(",", "."))
+
+
 def main() -> int:
     if not MANIFEST_PATH.exists():
         raise SystemExit("Build output is missing. Run scripts/build_site.py first.")
@@ -126,7 +134,10 @@ def main() -> int:
 
         home_page.goto(f"{base_url}/", wait_until="networkidle")
         home_page.wait_for_selector("#search-form")
-        home_page.wait_for_selector(".empty-state")
+        home_page.wait_for_function(
+            """() => document.querySelector('#results-section')?.hidden === true""",
+            timeout=10000,
+        )
 
         idle_home_chunks = {path for path in home_requests if path.startswith("data/search-chunks/")}
         if idle_home_chunks:
@@ -139,6 +150,10 @@ def main() -> int:
         home_page.fill("#q", "geotechnical geophysics environmental engineering water science")
         home_page.click('button[type="submit"]')
         wait_for_results(home_page)
+        home_page.wait_for_function(
+            """() => document.querySelector('#results-section')?.hidden === false""",
+            timeout=10000,
+        )
         home_request_set = wait_for_chunk_set(home_page, home_requests, expected_all)
         if home_request_set != expected_all:
             raise AssertionError(
@@ -214,6 +229,21 @@ def main() -> int:
                 f"Expected only prefix 'j' shards {sorted(expected_j)} on second search, got {sorted(new_requests)}"
             )
 
+        metric_page = browser.new_page()
+        metric_page.goto(f"{base_url}/search/", wait_until="networkidle")
+        metric_page.wait_for_selector("#search-form")
+        submit_search(metric_page, "cancer", scope="all")
+        metric_page.wait_for_selector(".search-card", timeout=20000)
+        metric_title = metric_page.locator(".search-card h3 a").first.inner_text().strip()
+        if metric_title != "Ca-A Cancer Journal for Clinicians":
+            raise AssertionError(f"Expected metric-sorted cancer search to start with Ca-A Cancer Journal for Clinicians, got: {metric_title}")
+        first_summary = metric_page.locator(".result-summary").nth(0).inner_text()
+        second_summary = metric_page.locator(".result-summary").nth(1).inner_text()
+        if parse_sjr(first_summary) < parse_sjr(second_summary):
+            raise AssertionError(
+                f"Expected descending SJR order for cancer search, got first two summaries: {first_summary!r} and {second_summary!r}"
+            )
+
         filter_page = browser.new_page()
         filter_requests: list[str] = []
 
@@ -265,7 +295,7 @@ def main() -> int:
         browser.close()
 
     print(
-        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
+        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, metric-based sorting ordered cancer results by descending SJR, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
     )
     print(f"Prefix 'a' shards: {sorted(expected_a)}")
     print(f"Prefix 'j' shards: {sorted(expected_j)}")

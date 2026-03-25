@@ -247,6 +247,22 @@ function safeText(value, fallback = "Not available") {
   return String(value);
 }
 
+function quartilePriority(value) {
+  if (value === "Q1") return 4;
+  if (value === "Q2") return 3;
+  if (value === "Q3") return 2;
+  if (value === "Q4") return 1;
+  return 0;
+}
+
+function journalMetricValue(record) {
+  return Number(record.sjr_value || 0);
+}
+
+function journalHIndexValue(record) {
+  return Number(record.h_index || 0);
+}
+
 function createBadge(text, className) {
   const badge = document.createElement("span");
   badge.className = `label ${className}`;
@@ -292,6 +308,8 @@ function prepareRecords(records) {
     record.normalized_index_summary = normalizeText(record.index_summary);
     record.normalized_issns = normalizeText((record.issns || []).join(" "));
     record.topic_text = normalizeText(`${record.categories || ""} ${record.areas || ""}`);
+    record.sjr_value = Number(record.sjr_value || 0);
+    record.h_index = Number(record.h_index || 0);
     record.search_text = [
       record.normalized_title,
       record.normalized_publisher,
@@ -520,6 +538,13 @@ function createResultSummary(record) {
     `Country: ${safeText(record.country)}`,
     `Best quartile: ${safeText(record.sjr_best_quartile, DASH_MARK)}`,
   ];
+
+  if (record.sjr_display) {
+    summaryItems.push(`SJR: ${record.sjr_display}`);
+  }
+  if (record.h_index) {
+    summaryItems.push(`H-index: ${record.h_index}`);
+  }
 
   if (record.index_summary) {
     summaryItems.push(`Indexed in: ${record.index_summary}`);
@@ -817,6 +842,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
   const results = document.querySelector("#search-results");
   const resultsCount = document.querySelector("#results-count");
   const resultsSummary = document.querySelector("#results-summary");
+  const resultsSection = document.querySelector("#results-section");
   const topPaginationInfo = document.querySelector("#search-pagination-top-info");
   const topPaginationList = document.querySelector("#search-pagination-top-list");
   const paginationInfo = document.querySelector("#search-pagination-info");
@@ -907,6 +933,13 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
     return results.querySelector(".search-card") || results.firstElementChild || results;
   }
 
+  function setResultsSectionVisible(visible) {
+    if (!resultsSection || pageMode !== "home") {
+      return;
+    }
+    resultsSection.hidden = !visible;
+  }
+
   function resetPaginationUi() {
     for (const region of paginationRegions) {
       if (region.info) {
@@ -954,6 +987,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
   }
 
   function renderPrompt() {
+    setResultsSectionVisible(false);
     resultsCount.textContent = `${totalProfiles} journal profiles ready.`;
     if (pageMode === "home") {
       renderEmptyResults(
@@ -969,6 +1003,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
   }
 
   function renderNlpHelp() {
+    setResultsSectionVisible(true);
     resultsCount.textContent = `Add more specific terms to search ${totalProfiles} journal profiles.`;
     renderEmptyResults(
       "Enter more specific search terms",
@@ -977,6 +1012,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
   }
 
   function renderLoadingState() {
+    setResultsSectionVisible(true);
     resultsCount.textContent = `Preparing matches from ${totalProfiles} journal profiles.`;
     results.replaceChildren(createEmptyState("Preparing search results", "Matching journal profiles are being loaded."));
     resetPaginationUi();
@@ -1039,7 +1075,17 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
     }
 
     matched.sort((left, right) => {
+      const leftMetric = journalMetricValue(left.record);
+      const rightMetric = journalMetricValue(right.record);
+      if (rightMetric !== leftMetric) return rightMetric - leftMetric;
+
+      const leftHIndex = journalHIndexValue(left.record);
+      const rightHIndex = journalHIndexValue(right.record);
+      if (rightHIndex !== leftHIndex) return rightHIndex - leftHIndex;
+
       if (right.score !== left.score) return right.score - left.score;
+      const quartileGap = quartilePriority(right.record.sjr_best_quartile) - quartilePriority(left.record.sjr_best_quartile);
+      if (quartileGap !== 0) return quartileGap;
       if (left.record.rank !== right.record.rank) return left.record.rank - right.record.rank;
       return left.record.title.localeCompare(right.record.title);
     });
@@ -1070,6 +1116,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
   }
 
   function renderPage(state, shouldScroll = false) {
+    setResultsSectionVisible(true);
     const filtered = applyFilters(state);
     const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
     if (page > totalPages) {
