@@ -8,10 +8,10 @@
     <meta name="robots" content="index,follow">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'">
     
-    <link rel="stylesheet" href="../assets/styles.css?v=2026-03-15+13%3A27+UTC">
-    <script defer src="../assets/app.js?v=2026-03-15+13%3A27+UTC"></script>
+    <link rel="stylesheet" href="../assets/styles.css?v=2026-03-25+10%3A36+UTC">
+    <script defer src="../assets/app.js?v=2026-03-25+10%3A36+UTC"></script>
   </head>
-  <body data-page="search" data-site-root=".." data-data-url="../data/search-manifest.json?v=2026-03-15+13%3A27+UTC">
+  <body data-page="search" data-site-root=".." data-data-url="../data/search-manifest.json?v=2026-03-25+10%3A36+UTC">
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
       <div class="shell">
@@ -20,68 +20,74 @@
           <span class="brand-subtitle">Advanced journal search</span>
         </a>
         <nav class="top-nav" aria-label="Primary">
-          <a href="../">Browse journals</a>
+          <a href="../">Home</a>
           <a href="./">Search journal profiles</a>
         </nav>
       </div>
     </header>
     <main id="main">
-        <section class="hero">
-          <div class="shell">
-            <div class="hero-panel">
-              <div class="hero-content">
-                <h1>Find journals by title, keyword, URL fragment, or article abstract.</h1>
-                <p class="hero-copy">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
-                <form class="abstract-search-form" action="search/" method="get">
-                  <input type="hidden" name="scope" value="abstract">
-                  <label class="field abstract-field" for="abstract-query">
-                    <span>Paste article abstract</span>
-                    <textarea id="abstract-query" name="q" rows="8" placeholder="Paste an article abstract. The app compares it with journal categories and subject areas to suggest relevant journals."></textarea>
-                  </label>
-                  <div class="hero-actions">
-                    <button type="submit">Find matching journals</button>
-                    <a class="button button-secondary" href="search/">Open advanced search</a>
-                  </div>
-                </form>
-                <div class="hero-actions">
-                  <a class="button button-secondary table-cta-button" href="#journal-table">Browse all journals</a>
-                </div>
-              </div>
+      <section class="hero">
+        <div class="shell">
+          <div class="hero-panel">
+            <div class="hero-content">
+              <h1>Search journal profiles by abstract, keyword, title, publisher, or URL.</h1>
+              <p class="hero-copy">Use abstract matching for recommendations, or switch scope and filters for a more precise search across journal metadata.</p>
             </div>
           </div>
-                    <select id="scope" name="scope">
-                      <option value="all">Keywords, titles, publishers, countries, and URLs</option>
-                      <option value="abstract">Abstract-to-topic matching</option>
-                      <option value="title">Title only</option>
-                      <option value="publisher">Publisher only</option>
-                      <option value="url">URL only</option>
-                    </select>
-                  </div>
-                  <div class="field">
-                    <label for="index-filter">Index filter</label>
-                    <select id="index-filter" name="index">
-                      <option value="all">All indices</option>
-                      <option value="scopus">Scopus only</option>
-                      <option value="wos">WoS only</option>
-                      <option value="doaj">DOAJ only</option>
-                    </select>
-                  </div>
-                  <div class="field">
-                    <label for="quartile-filter">Best quartile</label>
-                    <select id="quartile-filter" name="quartile">
-                      <option value="all">All quartiles</option>
-                      <option value="Q1">Q1</option>
-                      <option value="Q2">Q2</option>
-                      <option value="Q3">Q3</option>
-                      <option value="Q4">Q4</option>
-                    </select>
-                  </div>
-                  <div class="field">
-                    <label for="country-filter">Country</label>
-                    <select id="country-filter" name="country">
-                      <option value="all">All countries</option>
-                    </select>
-                  </div>
+        </div>
+      </section>
+      <section class="section">
+        <div class="shell" id="app-error"></div>
+        <div class="shell">
+          <div class="section-heading section-heading-results">
+            <div>
+              <p class="eyebrow results-eyebrow">ADVANCED SEARCH</p>
+              <h2>Search journal profiles</h2>
+              <p class="table-note">Search by abstract, keyword, title, publisher, URL fragment, indexing status, best quartile, or country.</p>
+            </div>
+            <div class="table-chip" id="results-summary">29,553 journal profiles ready</div>
+          </div>
+          <div class="filter-panel">
+            <form id="search-form" action="./" method="get" class="search-form-grid">
+              <div class="field search-query-field">
+                <label for="q">Search query</label>
+                <textarea id="q" name="q" rows="8" placeholder="Paste an abstract or enter a keyword, title, publisher, or URL fragment."></textarea>
+              </div>
+              <div class="search-filter-grid">
+                <div class="field">
+                  <label for="scope">Search scope</label>
+                  <select id="scope" name="scope">
+                    <option value="all">Keywords, titles, publishers, countries, and URLs</option>
+                    <option value="abstract">Abstract-to-topic matching</option>
+                    <option value="title">Title only</option>
+                    <option value="publisher">Publisher only</option>
+                    <option value="url">URL only</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="index-filter">Index filter</label>
+                  <select id="index-filter" name="index">
+                    <option value="all">All indices</option>
+                    <option value="scopus">Scopus only</option>
+                    <option value="wos">WoS only</option>
+                    <option value="doaj">DOAJ only</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="quartile-filter">Best quartile</label>
+                  <select id="quartile-filter" name="quartile">
+                    <option value="all">All quartiles</option>
+                    <option value="Q1">Q1</option>
+                    <option value="Q2">Q2</option>
+                    <option value="Q3">Q3</option>
+                    <option value="Q4">Q4</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="country-filter">Country</label>
+                  <select id="country-filter" name="country">
+                    <option value="all">All countries</option>
+                  </select>
                 </div>
               </div>
               <div class="hero-actions">
@@ -90,19 +96,21 @@
               </div>
             </form>
           </div>
-          <div class="results-toolbar">
-            <div class="results-count" id="results-count">Journal profiles</div>
-            <div class="results-toolbar-actions">
-              <div class="pagination pagination-inline">
-                <div class="pagination-info" id="search-pagination-top-info"></div>
-                <div class="pagination-list" id="search-pagination-top-list"></div>
+          <div class="results-panel">
+            <div class="results-toolbar">
+              <div class="results-count" id="results-count">Journal profiles ready.</div>
+              <div class="results-toolbar-actions">
+                <div class="pagination pagination-inline">
+                  <div class="pagination-info" id="search-pagination-top-info"></div>
+                  <div class="pagination-list" id="search-pagination-top-list"></div>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="search-results" id="search-results"></div>
-          <div class="pagination">
-            <div class="pagination-info" id="search-pagination-info"></div>
-            <div class="pagination-list" id="search-pagination-list"></div>
+            <div class="search-results" id="search-results"></div>
+            <div class="pagination">
+              <div class="pagination-info" id="search-pagination-info"></div>
+              <div class="pagination-list" id="search-pagination-list"></div>
+            </div>
           </div>
         </div>
       </section>

@@ -377,6 +377,7 @@ button:disabled {
 
 .card,
 .table-card,
+.results-panel,
 .search-card,
 .profile-card,
 .filter-panel {
@@ -425,12 +426,18 @@ button:disabled {
 }
 
 .table-card,
+.results-panel,
 .filter-panel,
 .profile-card {
   padding: 1rem;
 }
 
 .table-card {
+  padding: 1.2rem;
+  border-radius: 24px;
+}
+
+.results-panel {
   padding: 1.2rem;
   border-radius: 24px;
 }
@@ -508,7 +515,7 @@ button:disabled {
   font-size: 0.88rem;
 }
 
-#home-summary {
+#results-summary {
   padding: 0.75rem 1rem;
   border-radius: 16px;
   background: linear-gradient(135deg, rgba(25, 118, 210, 0.06), rgba(25, 118, 210, 0.14));
@@ -1039,6 +1046,7 @@ tbody tr:last-child td {
 
   .hero-panel,
   .table-card,
+  .results-panel,
   .filter-panel,
   .search-card,
   .profile-card {

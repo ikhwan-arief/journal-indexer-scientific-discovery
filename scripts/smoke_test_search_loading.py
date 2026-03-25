@@ -119,6 +119,55 @@ def main() -> int:
 
     with static_server(DOCS_DIR) as base_url, sync_playwright() as playwright:
         browser = playwright.chromium.launch()
+
+        home_page = browser.new_page()
+        home_requests: list[str] = []
+        home_page.on("requestfinished", lambda request: home_requests.append(path_from_url(request.url)))
+
+        home_page.goto(f"{base_url}/", wait_until="networkidle")
+        home_page.wait_for_selector("#search-form")
+        home_page.wait_for_selector(".empty-state")
+
+        idle_home_chunks = {path for path in home_requests if path.startswith("data/search-chunks/")}
+        if idle_home_chunks:
+            raise AssertionError(f"Expected no shard requests on homepage idle load, got: {sorted(idle_home_chunks)}")
+        if "data/search-manifest.json" not in home_requests:
+            raise AssertionError("Expected the search manifest to load on homepage open.")
+        if home_page.locator(".search-card").count() != 0:
+            raise AssertionError("Expected homepage to start without rendered journal result cards.")
+
+        home_page.fill("#q", "geotechnical geophysics environmental engineering water science")
+        home_page.click('button[type="submit"]')
+        wait_for_results(home_page)
+        home_request_set = wait_for_chunk_set(home_page, home_requests, expected_all)
+        if home_request_set != expected_all:
+            raise AssertionError(
+                f"Expected homepage abstract search to load all shards {sorted(expected_all)}, got {sorted(home_request_set)}"
+            )
+        if home_page.locator(".search-card").count() == 0:
+            raise AssertionError("Expected homepage search to render at least one result card.")
+
+        stopword_page = browser.new_page()
+        stopword_requests: list[str] = []
+        stopword_page.on("requestfinished", lambda request: stopword_requests.append(path_from_url(request.url)))
+
+        stopword_page.goto(f"{base_url}/", wait_until="networkidle")
+        stopword_page.wait_for_selector("#search-form")
+        stopword_page.fill("#q", "the and of yang dan di")
+        stopword_page.click('button[type="submit"]')
+        stopword_page.wait_for_function(
+            """() => {
+                const text = document.querySelector('.empty-state')?.textContent || '';
+                return text.includes('specific search terms');
+            }""",
+            timeout=10000,
+        )
+        stopword_chunks = {path for path in stopword_requests if path.startswith("data/search-chunks/")}
+        if stopword_chunks:
+            raise AssertionError(
+                f"Expected stop-word-only homepage query to avoid shard requests, got: {sorted(stopword_chunks)}"
+            )
+
         title_page = browser.new_page()
         title_requests: list[str] = []
 
@@ -216,7 +265,7 @@ def main() -> int:
         browser.close()
 
     print(
-        "Smoke test passed: idle search stayed idle, scope-only changes avoided shard loads, title searches fetched only the expected shards, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
+        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
     )
     print(f"Prefix 'a' shards: {sorted(expected_a)}")
     print(f"Prefix 'j' shards: {sorted(expected_j)}")

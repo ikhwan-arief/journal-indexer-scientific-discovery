@@ -497,7 +497,7 @@ def legacy_redirect_page_html() -> str:
         if (!sourceid) {
           renderFallback(
             "Legacy journal link could not be resolved.",
-            "Open the journal from the current browse or search interface instead.",
+            "Open the journal from the current search interface instead.",
             homeHref,
             "Back to home",
             true
@@ -569,54 +569,37 @@ def render_index_labels(record: JournalRecord) -> str:
     return "".join(labels)
 
 
-def render_initial_rows(records: list[JournalRecord]) -> str:
-    rows: list[str] = []
-    for record in records[:10]:
-        href = record.journal_url or record.runtime_profile_path
-        external_attrs = ' target="_blank" rel="noopener noreferrer"' if record.journal_url else ""
-        index_labels = ['<span class="label label-scopus">Scopus</span>']
-        if record.wos_indexed:
-            index_labels.append('<span class="label label-wos">WoS</span>')
-        if record.doaj_indexed:
-            index_labels.append('<span class="label label-doaj">DOAJ</span>')
-        rows.append(
-            f"""
-            <tr>
-              <td>
-                <div class=\"table-title\">
-                  <a href=\"{html.escape(href, quote=True)}\"{external_attrs}>{html.escape(record.title)}</a>
+def results_panel_html() -> str:
+    return """<div class=\"results-panel\">
+            <div class=\"results-toolbar\">
+              <div class=\"results-count\" id=\"results-count\">Journal profiles ready.</div>
+              <div class=\"results-toolbar-actions\">
+                <div class=\"pagination pagination-inline\">
+                  <div class=\"pagination-info\" id=\"search-pagination-top-info\"></div>
+                  <div class=\"pagination-list\" id=\"search-pagination-top-list\"></div>
                 </div>
-              </td>
-              <td>
-                <div class=\"table-publisher\" title=\"{html.escape(record.publisher or 'Not available', quote=True)}\">{html.escape(record.publisher or 'Not available')}</div>
-                <div class=\"mini-meta\" title=\"{html.escape(record.country or 'Country not available', quote=True)}\">{html.escape(record.country or 'Country not available')}</div>
-              </td>
-              <td>
-                <div class=\"topic-stack\">
-                  <div class=\"topic-primary\" title=\"{html.escape(record.areas or 'Area not available', quote=True)}\">{html.escape(record.areas or 'Area not available')}</div>
-                  <div class=\"topic-secondary\" title=\"{html.escape(record.categories or 'Categories not available', quote=True)}\">{html.escape(record.categories or 'Categories not available')}</div>
-                </div>
-              </td>
-              <td><div class=\"status-row\">{''.join(index_labels)}</div></td>
-              <td><span class=\"pill pill-quartile\">{html.escape(record.sjr_quartile or '—')}</span></td>
-              <td><a class=\"table-action-link\" href=\"{html.escape(record.runtime_profile_path, quote=True)}\" title=\"Open journal profile for {html.escape(record.title, quote=True)}\">View profile</a></td>
-            </tr>
-            """.strip()
-        )
-    return "\n".join(rows)
+              </div>
+            </div>
+            <div class=\"search-results\" id=\"search-results\"></div>
+            <div class=\"pagination\">
+              <div class=\"pagination-info\" id=\"search-pagination-info\"></div>
+              <div class=\"pagination-list\" id=\"search-pagination-list\"></div>
+            </div>
+          </div>"""
 
 
-def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
+def home_page_html(summary: SiteSummary) -> str:
     stylesheet_href = versioned_path("assets/styles.css", summary)
     script_src = versioned_path("assets/app.js", summary)
-    data_url = versioned_path("data/home.json", summary)
+    data_url = versioned_path("data/search-manifest.json", summary)
+    total_profiles = format(summary.total_journals, ",")
     return f"""<!doctype html>
 <html lang=\"en\">
   <head>
     <meta charset=\"utf-8\">
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
     <title>Journal Discovery | Match journal profiles from article abstracts</title>
-    <meta name=\"description\" content=\"Search and browse journal discovery data built from the active Scimago Journal Rank snapshot, with abstract-to-journal matching based on journal categories and areas.\">
+    <meta name=\"description\" content=\"Search journal discovery data built from the active Scimago Journal Rank snapshot, with abstract-to-journal matching based on journal categories and areas.\">
     <meta name=\"robots\" content=\"index,follow\">
     <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
     {maybe_canonical('')}
@@ -632,7 +615,7 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
           <span class=\"brand-subtitle\">Journal search for abstracts, keywords, and titles</span>
         </a>
         <nav class=\"top-nav\" aria-label=\"Primary\">
-          <a href=\"./\">Browse journals</a>
+          <a href=\"./\">Home</a>
           <a href=\"search/\">Search journal profiles</a>
         </nav>
       </div>
@@ -644,11 +627,11 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
             <div class=\"hero-content\">
               <h1>Find journals by title, keyword, URL fragment, or article abstract.</h1>
               <p class=\"hero-copy\">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
-              <form class=\"abstract-search-form\" action=\"search/\" method=\"get\">
-                <input type=\"hidden\" name=\"scope\" value=\"abstract\">
-                <label class=\"field abstract-field\" for=\"abstract-query\">
+              <form class=\"abstract-search-form\" id=\"search-form\" action=\"./\" method=\"get\">
+                <input type=\"hidden\" id=\"scope\" name=\"scope\" value=\"abstract\">
+                <label class=\"field abstract-field\" for=\"q\">
                   <span>Paste article abstract</span>
-                  <textarea id=\"abstract-query\" name=\"q\" rows=\"6\" placeholder=\"Paste an article abstract. The app compares it with journal categories and subject areas to suggest relevant journals.\"></textarea>
+                  <textarea id=\"q\" name=\"q\" rows=\"6\" placeholder=\"Paste an article abstract. The app compares it with journal categories and subject areas to suggest relevant journals.\"></textarea>
                 </label>
                 <div class=\"hero-actions-inline\">
                   <button type=\"submit\" class=\"button button-primary\">Find matching journals</button>
@@ -657,9 +640,6 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
               </form>
             </div>
           </div>
-          <div class=\"hero-actions-secondary\">
-            <a class=\"button button-secondary\" href=\"#journal-table\">Browse all journals</a>
-          </div>
         </div>
       </section>
       <section class=\"section\">
@@ -667,48 +647,13 @@ def home_page_html(records: list[JournalRecord], summary: SiteSummary) -> str:
         <div class=\"shell\">
           <div class=\"section-heading section-heading-results\">
             <div>
-              <p class=\"eyebrow results-eyebrow\">JOURNAL DIRECTORY</p>
-              <h2>Browse verified journal profiles</h2>
-              <p class=\"table-note\">Index badges show whether a journal appears in Scopus, WoS, and DOAJ when available. The quartile column shows the best <strong>SJR quartile</strong> available in the source data.</p>
+              <p class=\"eyebrow results-eyebrow\">SEARCH RESULTS</p>
+              <h2>Recommended journals</h2>
+              <p class=\"table-note\">Results appear here only after you submit an abstract or keyword query. Rankings combine literal matching and lightweight NLP over journal titles, categories, and areas.</p>
             </div>
-            <div class=\"table-chip\" id=\"home-summary\">Journal directory</div>
+            <div class=\"table-chip\" id=\"results-summary\">{total_profiles} journal profiles ready</div>
           </div>
-          <div class=\"table-card\">
-            <div class=\"table-controls\">
-              <div class=\"table-filter-pills\">
-                <span class=\"table-pill\">Scopus coverage</span>
-                <span class=\"table-pill\">WoS cross-check</span>
-                <span class=\"table-pill\">DOAJ enrichment</span>
-              </div>
-              <div class=\"table-controls-center\">
-                <a class=\"button button-secondary table-cta-button\" href=\"search/\">Open advanced search</a>
-              </div>
-              <div class=\"table-controls-right\">
-                <div class=\"table-chip\"><strong>10 journals</strong> per page</div>
-              </div>
-            </div>
-            <div class=\"table-wrap\">
-              <table id=\"journal-table\">
-                <thead>
-                  <tr>
-                    <th>JOURNAL TITLE</th>
-                    <th>PUBLISHER</th>
-                    <th>FOCUS AREAS</th>
-                    <th>INDEXED IN</th>
-                    <th>BEST SJR QUARTILE</th>
-                    <th>ACTION</th>
-                  </tr>
-                </thead>
-                <tbody id=\"journal-table-body\">
-                  {render_initial_rows(records)}
-                </tbody>
-              </table>
-            </div>
-            <div class=\"pagination\">
-              <div class=\"pagination-info\" id=\"pagination-info\"></div>
-              <div class=\"pagination-list\" id=\"pagination-list\"></div>
-            </div>
-          </div>
+          {results_panel_html()}
         </div>
       </section>
     </main>
@@ -727,6 +672,7 @@ def search_page_html(summary: SiteSummary) -> str:
     stylesheet_href = versioned_path("../assets/styles.css", summary)
     script_src = versioned_path("../assets/app.js", summary)
     data_url = versioned_path("../data/search-manifest.json", summary)
+    total_profiles = format(summary.total_journals, ",")
     return f"""<!doctype html>
 <html lang=\"en\">
   <head>
@@ -749,68 +695,74 @@ def search_page_html(summary: SiteSummary) -> str:
           <span class=\"brand-subtitle\">Advanced journal search</span>
         </a>
         <nav class=\"top-nav\" aria-label=\"Primary\">
-          <a href=\"../\">Browse journals</a>
+          <a href=\"../\">Home</a>
           <a href=\"./\">Search journal profiles</a>
         </nav>
       </div>
     </header>
     <main id=\"main\">
-        <section class=\"hero\">
-          <div class=\"shell\">
-            <div class=\"hero-panel\">
-              <div class=\"hero-content\">
-                <h1>Find journals by title, keyword, URL fragment, or article abstract.</h1>
-                <p class=\"hero-copy\">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Categories</strong> and <strong>Areas</strong>.</p>
-                <form class=\"abstract-search-form\" action=\"search/\" method=\"get\">
-                  <input type=\"hidden\" name=\"scope\" value=\"abstract\">
-                  <label class=\"field abstract-field\" for=\"abstract-query\">
-                    <span>Paste article abstract</span>
-                    <textarea id=\"abstract-query\" name=\"q\" rows=\"8\" placeholder=\"Paste an article abstract. The app compares it with journal categories and subject areas to suggest relevant journals.\"></textarea>
-                  </label>
-                  <div class=\"hero-actions\">
-                    <button type=\"submit\">Find matching journals</button>
-                    <a class=\"button button-secondary\" href=\"search/\">Open advanced search</a>
-                  </div>
-                </form>
-                <div class=\"hero-actions\">
-                  <a class=\"button button-secondary table-cta-button\" href=\"#journal-table\">Browse all journals</a>
-                </div>
-              </div>
+      <section class=\"hero\">
+        <div class=\"shell\">
+          <div class=\"hero-panel\">
+            <div class=\"hero-content\">
+              <h1>Search journal profiles by abstract, keyword, title, publisher, or URL.</h1>
+              <p class=\"hero-copy\">Use abstract matching for recommendations, or switch scope and filters for a more precise search across journal metadata.</p>
             </div>
           </div>
-                    <select id=\"scope\" name=\"scope\">
-                      <option value=\"all\">Keywords, titles, publishers, countries, and URLs</option>
-                      <option value=\"abstract\">Abstract-to-topic matching</option>
-                      <option value=\"title\">Title only</option>
-                      <option value=\"publisher\">Publisher only</option>
-                      <option value=\"url\">URL only</option>
-                    </select>
-                  </div>
-                  <div class=\"field\">
-                    <label for=\"index-filter\">Index filter</label>
-                    <select id=\"index-filter\" name=\"index\">
-                      <option value=\"all\">All indices</option>
-                      <option value=\"scopus\">Scopus only</option>
-                      <option value=\"wos\">WoS only</option>
-                      <option value=\"doaj\">DOAJ only</option>
-                    </select>
-                  </div>
-                  <div class=\"field\">
-                    <label for=\"quartile-filter\">Best quartile</label>
-                    <select id=\"quartile-filter\" name=\"quartile\">
-                      <option value=\"all\">All quartiles</option>
-                      <option value=\"Q1\">Q1</option>
-                      <option value=\"Q2\">Q2</option>
-                      <option value=\"Q3\">Q3</option>
-                      <option value=\"Q4\">Q4</option>
-                    </select>
-                  </div>
-                  <div class=\"field\">
-                    <label for=\"country-filter\">Country</label>
-                    <select id=\"country-filter\" name=\"country\">
-                      <option value=\"all\">All countries</option>
-                    </select>
-                  </div>
+        </div>
+      </section>
+      <section class=\"section\">
+        <div class=\"shell\" id=\"app-error\"></div>
+        <div class=\"shell\">
+          <div class=\"section-heading section-heading-results\">
+            <div>
+              <p class=\"eyebrow results-eyebrow\">ADVANCED SEARCH</p>
+              <h2>Search journal profiles</h2>
+              <p class=\"table-note\">Search by abstract, keyword, title, publisher, URL fragment, indexing status, best quartile, or country.</p>
+            </div>
+            <div class=\"table-chip\" id=\"results-summary\">{total_profiles} journal profiles ready</div>
+          </div>
+          <div class=\"filter-panel\">
+            <form id=\"search-form\" action=\"./\" method=\"get\" class=\"search-form-grid\">
+              <div class=\"field search-query-field\">
+                <label for=\"q\">Search query</label>
+                <textarea id=\"q\" name=\"q\" rows=\"8\" placeholder=\"Paste an abstract or enter a keyword, title, publisher, or URL fragment.\"></textarea>
+              </div>
+              <div class=\"search-filter-grid\">
+                <div class=\"field\">
+                  <label for=\"scope\">Search scope</label>
+                  <select id=\"scope\" name=\"scope\">
+                    <option value=\"all\">Keywords, titles, publishers, countries, and URLs</option>
+                    <option value=\"abstract\">Abstract-to-topic matching</option>
+                    <option value=\"title\">Title only</option>
+                    <option value=\"publisher\">Publisher only</option>
+                    <option value=\"url\">URL only</option>
+                  </select>
+                </div>
+                <div class=\"field\">
+                  <label for=\"index-filter\">Index filter</label>
+                  <select id=\"index-filter\" name=\"index\">
+                    <option value=\"all\">All indices</option>
+                    <option value=\"scopus\">Scopus only</option>
+                    <option value=\"wos\">WoS only</option>
+                    <option value=\"doaj\">DOAJ only</option>
+                  </select>
+                </div>
+                <div class=\"field\">
+                  <label for=\"quartile-filter\">Best quartile</label>
+                  <select id=\"quartile-filter\" name=\"quartile\">
+                    <option value=\"all\">All quartiles</option>
+                    <option value=\"Q1\">Q1</option>
+                    <option value=\"Q2\">Q2</option>
+                    <option value=\"Q3\">Q3</option>
+                    <option value=\"Q4\">Q4</option>
+                  </select>
+                </div>
+                <div class=\"field\">
+                  <label for=\"country-filter\">Country</label>
+                  <select id=\"country-filter\" name=\"country\">
+                    <option value=\"all\">All countries</option>
+                  </select>
                 </div>
               </div>
               <div class=\"hero-actions\">
@@ -819,20 +771,7 @@ def search_page_html(summary: SiteSummary) -> str:
               </div>
             </form>
           </div>
-          <div class=\"results-toolbar\">
-            <div class=\"results-count\" id=\"results-count\">Journal profiles</div>
-            <div class=\"results-toolbar-actions\">
-              <div class=\"pagination pagination-inline\">
-                <div class=\"pagination-info\" id=\"search-pagination-top-info\"></div>
-                <div class=\"pagination-list\" id=\"search-pagination-top-list\"></div>
-              </div>
-            </div>
-          </div>
-          <div class=\"search-results\" id=\"search-results\"></div>
-          <div class=\"pagination\">
-            <div class=\"pagination-info\" id=\"search-pagination-info\"></div>
-            <div class=\"pagination-list\" id=\"search-pagination-list\"></div>
-          </div>
+          {results_panel_html()}
         </div>
       </section>
     </main>
@@ -876,7 +815,7 @@ def profile_page_html(summary: SiteSummary) -> str:
           <span class=\"brand-subtitle\">Journal profile</span>
         </a>
         <nav class=\"top-nav\" aria-label=\"Primary\">
-          <a href=\"../\">Browse journals</a>
+          <a href=\"../\">Home</a>
           <a href=\"../search/\">Search journal profiles</a>
         </nav>
       </div>
@@ -899,7 +838,11 @@ def profile_page_html(summary: SiteSummary) -> str:
 def write_data_json(records: list[JournalRecord], summary: SiteSummary) -> None:
     home_payload = {
         "summary": asdict(summary),
-        "records": [record.to_home_dict() for record in records],
+        "ui": {
+            "eyebrow": "SEARCH RESULTS",
+            "title": "Recommended journals",
+            "description": "Results appear here after the user submits a query from the homepage.",
+        },
     }
     (DOCS_DIR / "data" / "home.json").write_text(
         json.dumps(home_payload, ensure_ascii=False, separators=(",", ":")),
@@ -968,7 +911,7 @@ def write_data_json(records: list[JournalRecord], summary: SiteSummary) -> None:
 
 def write_pages(records: list[JournalRecord], summary: SiteSummary) -> None:
     (DOCS_DIR / "index.html").write_text(
-        home_page_html(records, summary),
+        home_page_html(summary),
         encoding="utf-8",
     )
     (DOCS_DIR / "search" / "index.html").write_text(

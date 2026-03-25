@@ -1,9 +1,56 @@
-const CHECK_MARK = "✓";
 const DASH_MARK = "—";
-const ABSTRACT_STOP_WORDS = new Set([
-  "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "into", "is", "it", "of", "on", "or", "that", "the", "their", "this", "to", "with",
-  "using", "used", "use", "we", "our", "was", "were", "which", "while", "within", "without", "can", "may", "than", "then", "these", "those"
+const SEARCH_STOP_WORDS = new Set([
+  "a", "an", "and", "are", "as", "at", "be", "been", "being", "by", "for", "from", "in", "into", "is", "it", "its", "of", "on", "onto",
+  "or", "that", "the", "their", "this", "to", "with", "using", "used", "use", "we", "our", "was", "were", "which", "while", "within",
+  "without", "can", "may", "than", "then", "these", "those", "there", "here", "where", "when", "whose", "who", "whom", "what", "how",
+  "about", "after", "before", "between", "during", "through", "across", "over", "under", "such", "also", "other", "others", "more",
+  "most", "some", "many", "much", "each", "any", "all", "both", "either", "neither", "per", "via", "yet", "still",
+  "yang", "dan", "atau", "di", "ke", "dari", "untuk", "pada", "dengan", "dalam", "sebagai", "karena", "bahwa", "ini", "itu", "tersebut",
+  "adalah", "oleh", "juga", "agar", "antara", "dapat", "tidak", "serta", "para", "kami", "kita", "anda", "mereka", "sebuah", "suatu",
+  "terhadap", "melalui", "hingga", "setelah", "sebelum", "tanpa", "secara", "telah", "belum", "yakni", "yaitu", "guna", "maka", "namun",
+  "tetapi", "selain", "saat", "ketika", "jika", "bila", "sehingga", "dalamnya", "atas", "bawah", "lebih", "kurang", "masih", "sudah",
+  "lagi", "ialah", "yakinkan", "karna", "nya"
 ]);
+
+const ENGLISH_SUFFIX_RULES = [
+  { suffix: "ization", minLength: 8 },
+  { suffix: "isation", minLength: 8 },
+  { suffix: "ational", minLength: 8 },
+  { suffix: "fulness", minLength: 8 },
+  { suffix: "ousness", minLength: 8 },
+  { suffix: "iveness", minLength: 8 },
+  { suffix: "lessly", minLength: 8 },
+  { suffix: "ingly", minLength: 6 },
+  { suffix: "edly", minLength: 6 },
+  { suffix: "ments", minLength: 6 },
+  { suffix: "ment", minLength: 6 },
+  { suffix: "ation", minLength: 6 },
+  { suffix: "ities", minLength: 6 },
+  { suffix: "ings", minLength: 5 },
+  { suffix: "ness", minLength: 6 },
+  { suffix: "ions", minLength: 5 },
+  { suffix: "ion", minLength: 5 },
+  { suffix: "ers", minLength: 5 },
+  { suffix: "ing", minLength: 5 },
+  { suffix: "er", minLength: 5 },
+  { suffix: "ed", minLength: 4 },
+  { suffix: "ly", minLength: 4 },
+  { suffix: "es", minLength: 4 },
+  { suffix: "s", minLength: 4 },
+];
+
+const INDONESIAN_SUFFIX_RULES = [
+  { suffix: "kannya", minLength: 8 },
+  { suffix: "annya", minLength: 7 },
+  { suffix: "kanlah", minLength: 8 },
+  { suffix: "kan", minLength: 5 },
+  { suffix: "nya", minLength: 5 },
+  { suffix: "lah", minLength: 5 },
+  { suffix: "kah", minLength: 5 },
+  { suffix: "pun", minLength: 5 },
+  { suffix: "tah", minLength: 5 },
+  { suffix: "an", minLength: 5 },
+];
 
 function normalizeText(value) {
   return (value || "")
@@ -14,9 +61,126 @@ function normalizeText(value) {
     .trim();
 }
 
+function uniqueTokens(tokens) {
+  const seen = new Set();
+  const values = [];
+  for (const token of tokens) {
+    if (!token || seen.has(token)) {
+      continue;
+    }
+    seen.add(token);
+    values.push(token);
+  }
+  return values;
+}
+
 function searchPrefix(value) {
   const normalized = normalizeText(value);
   return normalized ? normalized[0] : "#";
+}
+
+function isPreciseScope(scope) {
+  return scope === "title" || scope === "publisher" || scope === "url";
+}
+
+function stemToken(token) {
+  if (!token || token.length < 3) {
+    return token;
+  }
+
+  let current = token;
+
+  if (current.endsWith("ies") && current.length >= 5) {
+    current = `${current.slice(0, -3)}y`;
+  } else if (current.endsWith("ied") && current.length >= 5) {
+    current = `${current.slice(0, -3)}y`;
+  }
+
+  for (const rule of INDONESIAN_SUFFIX_RULES) {
+    if (current.length >= rule.minLength && current.endsWith(rule.suffix)) {
+      current = current.slice(0, -rule.suffix.length);
+      break;
+    }
+  }
+
+  for (const rule of ENGLISH_SUFFIX_RULES) {
+    if (current.length >= rule.minLength && current.endsWith(rule.suffix)) {
+      current = current.slice(0, -rule.suffix.length);
+      break;
+    }
+  }
+
+  return current.length >= 3 ? current : token;
+}
+
+function tokenizeSearchText(value, options = {}) {
+  const { removeStopWords = true, minLength = 3, applyStemming = true } = options;
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return [];
+  }
+
+  const processed = [];
+  const seen = new Set();
+  for (const rawToken of normalized.split(" ")) {
+    if (!rawToken) {
+      continue;
+    }
+    const token = applyStemming ? stemToken(rawToken) : rawToken;
+    if (!token || token.length < minLength) {
+      continue;
+    }
+    if (removeStopWords && (SEARCH_STOP_WORDS.has(rawToken) || SEARCH_STOP_WORDS.has(token))) {
+      continue;
+    }
+    if (seen.has(token)) {
+      continue;
+    }
+    seen.add(token);
+    processed.push(token);
+  }
+
+  return processed;
+}
+
+function buildProcessedQuery(rawValue, scope) {
+  const normalized = normalizeText(rawValue);
+  const literalTokens = normalized ? normalized.split(" ").filter(Boolean) : [];
+  const tokens = tokenizeSearchText(rawValue);
+  const allTokensAreInsignificant = literalTokens.length > 0 && literalTokens.every((token) => {
+    const stemmed = stemToken(token);
+    return token.length < 3 || SEARCH_STOP_WORDS.has(token) || SEARCH_STOP_WORDS.has(stemmed);
+  });
+  const canUseLiteralOnly = isPreciseScope(scope) && normalized.length >= 2 && !allTokensAreInsignificant;
+
+  return {
+    raw: rawValue || "",
+    normalized,
+    literalTokens,
+    tokens,
+    hasRawQuery: Boolean(normalized),
+    hasMeaningfulTokens: tokens.length > 0,
+    canUseLiteralOnly,
+    shouldLoad: tokens.length > 0 || canUseLiteralOnly,
+  };
+}
+
+function mergeTokenLists(...lists) {
+  return uniqueTokens(lists.flat().filter(Boolean));
+}
+
+function tokenMatches(tokenSet, tokens) {
+  const matched = [];
+  for (const token of tokens) {
+    if (tokenSet.has(token)) {
+      matched.push(token);
+    }
+  }
+  return matched;
+}
+
+function tokenScore(tokenSet, tokens, weight) {
+  return tokenMatches(tokenSet, tokens).length * weight;
 }
 
 function joinRelative(siteRoot, relativePath) {
@@ -90,25 +254,6 @@ function createBadge(text, className) {
   return badge;
 }
 
-function createIndexBadgeRow(record) {
-  const wrapper = document.createElement("div");
-  wrapper.className = "status-row";
-  wrapper.appendChild(createBadge("Scopus", "label-scopus"));
-  if (record.wos_indexed) wrapper.appendChild(createBadge("WoS", "label-wos"));
-  if (record.doaj_indexed) wrapper.appendChild(createBadge("DOAJ", "label-doaj"));
-  return wrapper;
-}
-
-function createIndexCell(active) {
-  const cell = document.createElement("td");
-  const marker = document.createElement("span");
-  marker.className = "index-check";
-  marker.dataset.active = String(Boolean(active));
-  marker.textContent = active ? CHECK_MARK : DASH_MARK;
-  cell.appendChild(marker);
-  return cell;
-}
-
 function createLabelRow(record) {
   const wrapper = document.createElement("div");
   wrapper.className = "label-row";
@@ -119,23 +264,6 @@ function createLabelRow(record) {
   return wrapper;
 }
 
-function createTitleLink(record, siteRoot) {
-  const link = document.createElement("a");
-  link.href = joinRelative(siteRoot, record.profile_path);
-  link.textContent = record.title;
-  link.title = `Open journal profile for ${record.title}`;
-  return link;
-}
-
-function createHomeActionLink(record, siteRoot) {
-  const link = document.createElement("a");
-  link.className = "table-action-link";
-  link.href = joinRelative(siteRoot, record.profile_path);
-  link.textContent = "View profile";
-  link.title = `Open journal profile for ${record.title}`;
-  return link;
-}
-
 function buildProfilePath(record) {
   const sourceid = encodeURIComponent(String(record?.sourceid || ""));
   return sourceid ? `journal/?sourceid=${sourceid}` : "journal/";
@@ -143,223 +271,228 @@ function buildProfilePath(record) {
 
 function prepareRecords(records) {
   for (const record of records) {
+    if (record._preparedSearch) {
+      continue;
+    }
+
     record.scopus_indexed = record.scopus_indexed !== false;
     record.profile_path = buildProfilePath(record);
+
     const labels = ["Scopus"];
     if (record.wos_indexed) labels.push("WoS");
     if (record.doaj_indexed) labels.push("DOAJ");
     record.index_summary = labels.join(", ");
+
     record.normalized_title = normalizeText(record.title || "");
     record.normalized_publisher = normalizeText(record.publisher || "");
     record.normalized_country = normalizeText(record.country || "");
     record.normalized_url = normalizeText(record.journal_url || "");
-    record.topic_text = normalizeText(`${record.categories || ""} ${record.areas || ""}`);
     record.normalized_categories = normalizeText(record.categories || "");
     record.normalized_areas = normalizeText(record.areas || "");
+    record.normalized_index_summary = normalizeText(record.index_summary);
+    record.normalized_issns = normalizeText((record.issns || []).join(" "));
+    record.topic_text = normalizeText(`${record.categories || ""} ${record.areas || ""}`);
     record.search_text = [
       record.normalized_title,
       record.normalized_publisher,
       record.normalized_country,
       record.normalized_url,
-      normalizeText(record.index_summary),
+      record.normalized_index_summary,
       record.normalized_categories,
       record.normalized_areas,
-      normalizeText((record.issns || []).join(" "))
+      record.normalized_issns,
     ].filter(Boolean).join(" ");
+
+    record.title_tokens = tokenizeSearchText(record.title || "");
+    record.publisher_tokens = tokenizeSearchText(record.publisher || "");
+    record.country_tokens = tokenizeSearchText(record.country || "");
+    record.url_tokens = tokenizeSearchText(record.journal_url || "");
+    record.category_tokens = tokenizeSearchText(record.categories || "");
+    record.area_tokens = tokenizeSearchText(record.areas || "");
+    record.index_tokens = tokenizeSearchText(record.index_summary);
+    record.issn_tokens = tokenizeSearchText((record.issns || []).join(" "), { removeStopWords: false, applyStemming: false });
+    record.topic_tokens = mergeTokenLists(record.category_tokens, record.area_tokens);
+    record.search_tokens = mergeTokenLists(
+      record.title_tokens,
+      record.publisher_tokens,
+      record.country_tokens,
+      record.url_tokens,
+      record.category_tokens,
+      record.area_tokens,
+      record.index_tokens,
+      record.issn_tokens
+    );
+
+    record.title_token_set = new Set(record.title_tokens);
+    record.publisher_token_set = new Set(record.publisher_tokens);
+    record.country_token_set = new Set(record.country_tokens);
+    record.url_token_set = new Set(record.url_tokens);
+    record.category_token_set = new Set(record.category_tokens);
+    record.area_token_set = new Set(record.area_tokens);
+    record.topic_token_set = new Set(record.topic_tokens);
+    record.search_token_set = new Set(record.search_tokens);
+    record.issn_token_set = new Set(record.issn_tokens);
+    record._preparedSearch = true;
   }
 }
 
-function renderHomePage(records, siteRoot) {
-  const table = document.querySelector("#journal-table");
-  const tbody = document.querySelector("#journal-table-body");
-  const summary = document.querySelector("#home-summary");
-  const paginationInfo = document.querySelector("#pagination-info");
-  const paginationList = document.querySelector("#pagination-list");
-  const perPage = 10;
-  let page = 1;
-  const totalPages = Math.max(1, Math.ceil(records.length / perPage));
-
-  if (summary) {
-    summary.textContent = `${records.length.toLocaleString("en-US")} journals in the directory.`;
+function literalMatchScore(text, query) {
+  if (!text || !query) {
+    return 0;
   }
-
-  function homeScrollTarget() {
-    return tbody.querySelector("tr") || table || tbody;
+  if (text === query) {
+    return 140;
   }
-
-  function goToPage(nextPage, shouldScroll = false) {
-    page = Math.min(Math.max(nextPage, 1), totalPages);
-    const start = (page - 1) * perPage;
-    const pageItems = records.slice(start, start + perPage);
-    tbody.replaceChildren();
-
-    if (summary) {
-      summary.textContent = `Showing ${start + 1}-${start + pageItems.length} of ${records.length.toLocaleString("en-US")} journals.`;
-    }
-
-    for (const record of pageItems) {
-      const row = document.createElement("tr");
-
-      const titleCell = document.createElement("td");
-      const titleWrap = document.createElement("div");
-      titleWrap.className = "table-title";
-      titleWrap.appendChild(createTitleLink(record, siteRoot));
-      titleCell.appendChild(titleWrap);
-      row.appendChild(titleCell);
-
-      const publisherCell = document.createElement("td");
-      const publisherWrap = document.createElement("div");
-      publisherWrap.className = "table-publisher";
-      publisherWrap.textContent = safeText(record.publisher, "Not available");
-      publisherWrap.title = publisherWrap.textContent;
-      const publisherMeta = document.createElement("div");
-      publisherMeta.className = "mini-meta";
-      publisherMeta.textContent = safeText(record.country, "Country not available");
-      publisherMeta.title = publisherMeta.textContent;
-      publisherCell.appendChild(publisherWrap);
-      publisherCell.appendChild(publisherMeta);
-      row.appendChild(publisherCell);
-
-      const topicCell = document.createElement("td");
-      const topicWrap = document.createElement("div");
-      topicWrap.className = "topic-stack";
-      const topicPrimary = document.createElement("div");
-      topicPrimary.className = "topic-primary";
-      topicPrimary.textContent = safeText(record.areas, "Area not available");
-      topicPrimary.title = topicPrimary.textContent;
-      const topicSecondary = document.createElement("div");
-      topicSecondary.className = "topic-secondary";
-      topicSecondary.textContent = safeText(record.categories, "Categories not available");
-      topicSecondary.title = topicSecondary.textContent;
-      topicWrap.appendChild(topicPrimary);
-      topicWrap.appendChild(topicSecondary);
-      topicCell.appendChild(topicWrap);
-      row.appendChild(topicCell);
-
-      const indexedCell = document.createElement("td");
-      indexedCell.appendChild(createIndexBadgeRow(record));
-      row.appendChild(indexedCell);
-
-      const quartileCell = document.createElement("td");
-      const quartilePill = document.createElement("span");
-      quartilePill.className = "pill pill-quartile";
-      quartilePill.textContent = safeText(record.sjr_quartile, DASH_MARK);
-      quartileCell.appendChild(quartilePill);
-      row.appendChild(quartileCell);
-
-      const actionCell = document.createElement("td");
-      actionCell.appendChild(createHomeActionLink(record, siteRoot));
-      row.appendChild(actionCell);
-
-      tbody.appendChild(row);
-    }
-
-    if (paginationInfo) {
-      paginationInfo.textContent = `Page ${page} of ${totalPages} · 10 per page`;
-    }
-
-    if (paginationList) {
-      paginationList.replaceChildren();
-      const buttons = [];
-      buttons.push({ label: "‹ Prev", page: page - 1, disabled: page === 1 });
-      const startPage = Math.max(1, page - 2);
-      const endPage = Math.min(totalPages, startPage + 4);
-      for (let index = startPage; index <= endPage; index += 1) {
-        buttons.push({ label: String(index), page: index, current: index === page });
-      }
-      buttons.push({ label: "Next ›", page: page + 1, disabled: page === totalPages });
-
-      for (const item of buttons) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.textContent = item.label;
-        button.disabled = Boolean(item.disabled);
-        if (item.current) {
-          button.setAttribute("aria-current", "page");
-        }
-        button.addEventListener("click", () => goToPage(item.page, true));
-        paginationList.appendChild(button);
-      }
-    }
-
-    if (shouldScroll) {
-      scheduleScrollToTop(homeScrollTarget);
-    }
+  if (text.startsWith(query)) {
+    return 100;
   }
-
-  goToPage(1);
+  if (text.includes(query)) {
+    return 70;
+  }
+  return 0;
 }
 
-function extractAbstractTerms(value) {
-  return normalizeText(value)
-    .split(" ")
-    .filter((token) => token.length >= 3 && !ABSTRACT_STOP_WORDS.has(token));
+function fuzzyScore(text, query) {
+  const literalScore = literalMatchScore(text, query);
+  if (literalScore > 0) {
+    return literalScore;
+  }
+  if (!text || !query) {
+    return 0;
+  }
+  let cursor = 0;
+  for (const char of query) {
+    cursor = text.indexOf(char, cursor);
+    if (cursor === -1) {
+      return 0;
+    }
+    cursor += 1;
+  }
+  return query.length >= 4 ? 18 : 10;
+}
+
+function matchScope(record, scope) {
+  if (scope === "abstract") return record.topic_text || "";
+  if (scope === "title") return record.normalized_title || "";
+  if (scope === "publisher") return record.normalized_publisher || "";
+  if (scope === "url") return record.normalized_url || "";
+  return record.search_text || "";
+}
+
+function matchScopeTokenSet(record, scope) {
+  if (scope === "abstract") return record.topic_token_set || new Set();
+  if (scope === "title") return record.title_token_set || new Set();
+  if (scope === "publisher") return record.publisher_token_set || new Set();
+  if (scope === "url") return record.url_token_set || new Set();
+  return record.search_token_set || new Set();
 }
 
 function abstractScore(record, query) {
-  const topicText = record.topic_text || "";
-  if (!topicText) {
-    return 0;
-  }
-  const terms = extractAbstractTerms(query);
-  if (!terms.length) {
+  if (!query.hasMeaningfulTokens) {
     return 0;
   }
 
-  let matchScore = 0;
-  const matchedTerms = new Set();
-  for (const term of terms) {
-    if (topicText.includes(term)) {
-      matchedTerms.add(term);
-      matchScore += term.length >= 7 ? 10 : 6;
-    }
-  }
-
-  if (!matchedTerms.size) {
+  const categoryMatches = tokenMatches(record.category_token_set, query.tokens);
+  const areaMatches = tokenMatches(record.area_token_set, query.tokens);
+  const matchedTerms = mergeTokenLists(categoryMatches, areaMatches);
+  if (!matchedTerms.length) {
     return 0;
   }
 
-  const coverageBonus = Math.round((matchedTerms.size / terms.length) * 80);
-  const categoryBonus = fuzzyScore(topicText, normalizeText(record.categories || "")) > 0 ? 10 : 0;
-  return matchScore + coverageBonus + categoryBonus;
+  let score = 0;
+  score += categoryMatches.length * 26;
+  score += areaMatches.length * 18;
+  score += Math.round((matchedTerms.length / query.tokens.length) * 90);
+  score += literalMatchScore(record.topic_text, query.normalized) > 0 ? 12 : 0;
+  return score;
 }
 
 function abstractInsight(record, query) {
-  const terms = extractAbstractTerms(query);
-  if (!terms.length) {
+  if (!query.hasMeaningfulTokens) {
     return null;
   }
 
-  const matchedTerms = [];
-  const matchedInCategories = [];
-  const matchedInAreas = [];
-  for (const term of terms) {
-    let matched = false;
-    if ((record.normalized_categories || "").includes(term)) {
-      matchedInCategories.push(term);
-      matched = true;
-    }
-    if ((record.normalized_areas || "").includes(term)) {
-      matchedInAreas.push(term);
-      matched = true;
-    }
-    if (matched && !matchedTerms.includes(term)) {
-      matchedTerms.push(term);
-    }
-  }
+  const matchedInCategories = tokenMatches(record.category_token_set, query.tokens);
+  const matchedInAreas = tokenMatches(record.area_token_set, query.tokens);
+  const matchedTerms = mergeTokenLists(matchedInCategories, matchedInAreas);
 
   if (!matchedTerms.length) {
     return null;
   }
 
-  const fieldParts = [];
-  if (matchedInCategories.length) fieldParts.push("Categories");
-  if (matchedInAreas.length) fieldParts.push("Areas");
+  const fields = [];
+  if (matchedInCategories.length) fields.push("Categories");
+  if (matchedInAreas.length) fields.push("Areas");
 
   return {
     terms: matchedTerms.slice(0, 8),
-    fields: fieldParts,
+    fields,
   };
+}
+
+function allScopeScore(record, query) {
+  if (!query.hasMeaningfulTokens && !query.normalized) {
+    return 0;
+  }
+
+  const matchedTerms = mergeTokenLists(
+    tokenMatches(record.title_token_set, query.tokens),
+    tokenMatches(record.category_token_set, query.tokens),
+    tokenMatches(record.area_token_set, query.tokens),
+    tokenMatches(record.publisher_token_set, query.tokens),
+    tokenMatches(record.country_token_set, query.tokens),
+    tokenMatches(record.url_token_set, query.tokens),
+    tokenMatches(record.issn_token_set, query.tokens)
+  );
+
+  let score = 0;
+  score += literalMatchScore(record.normalized_title, query.normalized);
+  score += Math.round(literalMatchScore(record.normalized_publisher, query.normalized) * 0.7);
+  score += Math.round(literalMatchScore(record.normalized_url, query.normalized) * 0.7);
+  score += Math.round(literalMatchScore(record.search_text, query.normalized) * 0.45);
+  score += tokenScore(record.title_token_set, query.tokens, 24);
+  score += tokenScore(record.category_token_set, query.tokens, 18);
+  score += tokenScore(record.area_token_set, query.tokens, 15);
+  score += tokenScore(record.publisher_token_set, query.tokens, 12);
+  score += tokenScore(record.country_token_set, query.tokens, 8);
+  score += tokenScore(record.url_token_set, query.tokens, 10);
+  score += tokenScore(record.issn_token_set, query.tokens, 14);
+
+  if (matchedTerms.length) {
+    score += Math.round((matchedTerms.length / query.tokens.length) * 55);
+  }
+
+  return score;
+}
+
+function preciseScopeScore(record, query, scope) {
+  if (!query.normalized) {
+    return 0;
+  }
+
+  const haystack = matchScope(record, scope);
+  if (!haystack) {
+    return 0;
+  }
+
+  let score = fuzzyScore(haystack, query.normalized);
+  if (query.hasMeaningfulTokens) {
+    score += tokenScore(matchScopeTokenSet(record, scope), query.tokens, 12);
+  }
+  return score;
+}
+
+function scoreRecord(record, query, scope) {
+  if (!query.hasRawQuery) {
+    return 1;
+  }
+  if (scope === "abstract") {
+    return abstractScore(record, query);
+  }
+  if (scope === "all") {
+    return allScopeScore(record, query);
+  }
+  return preciseScopeScore(record, query, scope);
 }
 
 function createInsightBox(insight, score) {
@@ -418,63 +551,6 @@ function createSearchActions(record, siteRoot) {
   }
 
   return wrapper;
-}
-
-function tokenScore(haystack, tokens) {
-  let score = 0;
-  for (const token of tokens) {
-    if (haystack.includes(token)) {
-      score += 8;
-    }
-  }
-  return score;
-}
-
-function fuzzyScore(text, query) {
-  if (!text || !query) {
-    return 0;
-  }
-  if (text === query) {
-    return 120;
-  }
-  if (text.startsWith(query)) {
-    return 80;
-  }
-  if (text.includes(query)) {
-    return 60;
-  }
-  let cursor = 0;
-  for (const char of query) {
-    cursor = text.indexOf(char, cursor);
-    if (cursor === -1) {
-      return 0;
-    }
-    cursor += 1;
-  }
-  return 20;
-}
-
-function matchScope(record, scope) {
-  if (scope === "abstract") return record.topic_text || "";
-  if (scope === "title") return record.normalized_title || "";
-  if (scope === "publisher") return record.normalized_publisher || "";
-  if (scope === "url") return record.normalized_url || "";
-  return record.search_text || "";
-}
-
-function scoreRecord(record, query, scope) {
-  if (!query) {
-    return 1;
-  }
-  if (scope === "abstract") {
-    return abstractScore(record, query);
-  }
-  const haystack = matchScope(record, scope);
-  if (!haystack) {
-    return 0;
-  }
-  const tokens = query.split(" ").filter(Boolean);
-  return fuzzyScore(haystack, query) + tokenScore(haystack, tokens);
 }
 
 function buildDetailItem(label, value, siteRoot, isLink = false) {
@@ -547,6 +623,21 @@ function updateProfileMetadata(record) {
   setMetaContent('meta[property="og:description"]', description);
 }
 
+function createEmptyState(titleText, bodyText) {
+  const empty = document.createElement("div");
+  empty.className = "empty-state";
+
+  const title = document.createElement("strong");
+  title.textContent = titleText;
+  empty.appendChild(title);
+
+  const body = document.createElement("span");
+  body.textContent = bodyText;
+  empty.appendChild(body);
+
+  return empty;
+}
+
 function renderProfileEmptyState(titleText, bodyText) {
   const root = document.querySelector("#profile-root");
   if (!root) {
@@ -559,18 +650,7 @@ function renderProfileEmptyState(titleText, bodyText) {
   section.className = "section";
   const shell = document.createElement("div");
   shell.className = "shell";
-  const empty = document.createElement("div");
-  empty.className = "empty-state";
-
-  const title = document.createElement("strong");
-  title.textContent = titleText;
-  empty.appendChild(title);
-
-  const body = document.createElement("span");
-  body.textContent = bodyText;
-  empty.appendChild(body);
-
-  shell.appendChild(empty);
+  shell.appendChild(createEmptyState(titleText, bodyText));
   section.appendChild(shell);
   root.appendChild(section);
 
@@ -679,7 +759,7 @@ function renderProfilePage(record, siteRoot) {
   side.className = "profile-side detail-grid";
   side.appendChild(buildDetailItem("Source ID", record.sourceid));
   side.appendChild(buildNavigationDetailItem("Search", searchUrl, "Search similar journals", `Search journals similar to ${record.title}`));
-  side.appendChild(buildNavigationDetailItem("Navigation", joinRelative(siteRoot, ""), "Back to home", "Return to the journal directory"));
+  side.appendChild(buildNavigationDetailItem("Navigation", joinRelative(siteRoot, ""), "Back to home", "Return to the search homepage"));
   side.appendChild(buildDetailItem("Data note", "Website, APC, license, and copyright details are shown when available."));
   layout.appendChild(side);
 
@@ -687,7 +767,6 @@ function renderProfilePage(record, siteRoot) {
   shell.appendChild(card);
   section.appendChild(shell);
   root.appendChild(section);
-
 }
 
 async function renderDynamicProfile(profileIndex, siteRoot) {
@@ -698,7 +777,7 @@ async function renderDynamicProfile(profileIndex, siteRoot) {
   if (!sourceid) {
     renderProfileEmptyState(
       "Journal profile not specified.",
-      "Open a journal profile from the browse or search interface to load its details."
+      "Open a journal profile from the search results or journal links to load its details."
     );
     return;
   }
@@ -733,23 +812,30 @@ async function renderDynamicProfile(profileIndex, siteRoot) {
   renderProfilePage(record, siteRoot);
 }
 
-function renderSearchPage(manifest, siteRoot) {
+function renderSearchExperience(manifest, siteRoot, pageMode) {
   const form = document.querySelector("#search-form");
   const results = document.querySelector("#search-results");
   const resultsCount = document.querySelector("#results-count");
+  const resultsSummary = document.querySelector("#results-summary");
   const topPaginationInfo = document.querySelector("#search-pagination-top-info");
   const topPaginationList = document.querySelector("#search-pagination-top-list");
   const paginationInfo = document.querySelector("#search-pagination-info");
   const paginationList = document.querySelector("#search-pagination-list");
   const queryInput = document.querySelector("#q");
-  const scopeSelect = document.querySelector("#scope");
+  const scopeField = document.querySelector("#scope");
   const indexSelect = document.querySelector("#index-filter");
   const quartileSelect = document.querySelector("#quartile-filter");
   const countrySelect = document.querySelector("#country-filter");
+
+  if (!form || !results || !resultsCount || !queryInput || !scopeField) {
+    return;
+  }
+
   const perPage = 10;
   const chunkPaths = manifest.chunk_paths || [];
   const titlePrefixChunks = manifest.title_prefix_chunks || {};
   const versionTag = manifest.summary?.generated_at || "";
+  const totalProfiles = Number(manifest.summary?.total_journals || 0).toLocaleString("en-US");
   const loadedChunkMap = new Map();
   const loadingChunkMap = new Map();
   const paginationRegions = [
@@ -759,33 +845,55 @@ function renderSearchPage(manifest, siteRoot) {
   let records = [];
   let page = 1;
 
-  (manifest.countries || []).forEach((country) => {
-    const option = document.createElement("option");
-    option.value = country;
-    option.textContent = country;
-    countrySelect.appendChild(option);
-  });
+  if (resultsSummary) {
+    resultsSummary.textContent = `${totalProfiles} journal profiles ready`;
+  }
+
+  if (countrySelect) {
+    for (const country of manifest.countries || []) {
+      const option = document.createElement("option");
+      option.value = country;
+      option.textContent = country;
+      countrySelect.appendChild(option);
+    }
+  }
 
   const params = new URLSearchParams(window.location.search);
   queryInput.value = params.get("q") || "";
-  scopeSelect.value = params.get("scope") || "all";
-  indexSelect.value = params.get("index") || "all";
-  quartileSelect.value = params.get("quartile") || "all";
-  countrySelect.value = params.get("country") || "all";
-  page = Number(params.get("page") || "1");
+  scopeField.value = params.get("scope") || (pageMode === "home" ? "abstract" : "all");
+  if (indexSelect) indexSelect.value = params.get("index") || "all";
+  if (quartileSelect) quartileSelect.value = params.get("quartile") || "all";
+  if (countrySelect) countrySelect.value = params.get("country") || "all";
+  page = Math.max(1, Number.parseInt(params.get("page") || "1", 10) || 1);
 
-  function shouldLoadDataset() {
-    return Boolean(queryInput.value.trim())
-      || indexSelect.value !== "all"
-      || quartileSelect.value !== "all"
-      || countrySelect.value !== "all"
-      || page > 1;
+  function currentScope() {
+    return scopeField.value || (pageMode === "home" ? "abstract" : "all");
   }
 
-  function getPreferredChunkPaths() {
-    const query = queryInput.value.trim();
-    if (scopeSelect.value === "title" && query) {
-      return titlePrefixChunks[searchPrefix(query)] || chunkPaths;
+  function currentState() {
+    const scope = currentScope();
+    const query = buildProcessedQuery(queryInput.value, scope);
+    const indexFilter = indexSelect?.value || "all";
+    const quartileFilter = quartileSelect?.value || "all";
+    const countryFilter = countrySelect?.value || "all";
+    const hasFilters = indexFilter !== "all" || quartileFilter !== "all" || countryFilter !== "all";
+
+    return {
+      scope,
+      query,
+      indexFilter,
+      quartileFilter,
+      countryFilter,
+      hasFilters,
+      shouldLoad: hasFilters || query.shouldLoad,
+      shouldShowPrompt: !hasFilters && !query.hasRawQuery,
+      shouldShowNlpHelp: !hasFilters && query.hasRawQuery && !query.shouldLoad,
+    };
+  }
+
+  function getPreferredChunkPaths(state) {
+    if (state.scope === "title" && state.query.normalized) {
+      return titlePrefixChunks[searchPrefix(state.query.normalized)] || chunkPaths;
     }
     return chunkPaths;
   }
@@ -793,101 +901,6 @@ function renderSearchPage(manifest, siteRoot) {
   function mergeLoadedRecords() {
     records = Array.from(loadedChunkMap.values()).flat();
     return records;
-  }
-
-  async function ensureRecordsLoaded() {
-    const preferredChunkPaths = getPreferredChunkPaths();
-    const pendingChunkPaths = preferredChunkPaths.filter((chunkPath) => !loadedChunkMap.has(chunkPath));
-
-    if (!pendingChunkPaths.length) {
-      return mergeLoadedRecords();
-    }
-
-    if (!loadedChunkMap.size) {
-      const totalProfiles = Number(manifest.summary?.total_journals || 0).toLocaleString("en-US");
-      const titleScoped = scopeSelect.value === "title" && queryInput.value.trim();
-      resultsCount.textContent = titleScoped
-        ? `${totalProfiles} journal profiles`
-        : `${totalProfiles} journal profiles`;
-      const loading = document.createElement("div");
-      loading.className = "empty-state";
-      const title = document.createElement("strong");
-      title.textContent = "Please wait";
-      loading.appendChild(title);
-      const body = document.createElement("span");
-      body.textContent = "Results are being prepared.";
-      loading.appendChild(body);
-      results.replaceChildren(loading);
-    }
-
-    const fetchPromises = pendingChunkPaths.map((chunkPath) => {
-      if (loadingChunkMap.has(chunkPath)) {
-        return loadingChunkMap.get(chunkPath);
-      }
-
-      const fetchPromise = fetch(joinRelative(siteRoot, withVersion(chunkPath, versionTag)), { credentials: "same-origin" })
-        .then(async (response) => {
-          if (!response.ok) {
-            throw new Error(`Failed to load search chunk: ${response.status}`);
-          }
-          const payload = await response.json();
-          const chunkRecords = payload.records || [];
-          prepareRecords(chunkRecords);
-          loadedChunkMap.set(chunkPath, chunkRecords);
-          return chunkRecords;
-        })
-        .finally(() => {
-          loadingChunkMap.delete(chunkPath);
-        });
-
-      loadingChunkMap.set(chunkPath, fetchPromise);
-      return fetchPromise;
-    });
-
-    await Promise.all(fetchPromises);
-    return mergeLoadedRecords();
-  }
-
-  function applyFilters() {
-    const rawQuery = queryInput.value;
-    const query = normalizeText(rawQuery);
-    const scope = scopeSelect.value;
-    const indexFilter = indexSelect.value;
-    const quartileFilter = quartileSelect.value;
-    const countryFilter = countrySelect.value;
-
-    const matched = [];
-    for (const record of records) {
-      if (indexFilter === "wos" && !record.wos_indexed) continue;
-      if (indexFilter === "doaj" && !record.doaj_indexed) continue;
-      if (indexFilter === "scopus" && !record.scopus_indexed) continue;
-      if (quartileFilter !== "all" && record.sjr_best_quartile !== quartileFilter) continue;
-      if (countryFilter !== "all" && record.country !== countryFilter) continue;
-
-      const score = scoreRecord(record, query, scope);
-      if (!query || score > 0) {
-        matched.push({ score, record, rawQuery, scope });
-      }
-    }
-
-    matched.sort((left, right) => {
-      if (right.score !== left.score) return right.score - left.score;
-      if (left.record.rank !== right.record.rank) return left.record.rank - right.record.rank;
-      return left.record.title.localeCompare(right.record.title);
-    });
-    return matched;
-  }
-
-  function syncUrl() {
-    const nextParams = new URLSearchParams();
-    if (queryInput.value.trim()) nextParams.set("q", queryInput.value.trim());
-    if (queryInput.value.trim() && scopeSelect.value !== "all") nextParams.set("scope", scopeSelect.value);
-    if (indexSelect.value !== "all") nextParams.set("index", indexSelect.value);
-    if (quartileSelect.value !== "all") nextParams.set("quartile", quartileSelect.value);
-    if (countrySelect.value !== "all") nextParams.set("country", countrySelect.value);
-    if (page > 1) nextParams.set("page", String(page));
-    const nextUrl = `${window.location.pathname}${nextParams.toString() ? `?${nextParams}` : ""}`;
-    window.history.replaceState({}, "", nextUrl);
   }
 
   function searchScrollTarget() {
@@ -935,25 +948,129 @@ function renderSearchPage(manifest, siteRoot) {
     }
   }
 
-  function renderPrompt() {
-    results.replaceChildren();
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    const title = document.createElement("strong");
-    title.textContent = "Start your search";
-    empty.appendChild(title);
-    const body = document.createElement("span");
-    body.textContent = "Search by abstract, keyword, title, publisher, country, or URL fragment.";
-    empty.appendChild(body);
-    results.appendChild(empty);
-    if (resultsCount) {
-      resultsCount.textContent = `${Number(manifest.summary?.total_journals || 0).toLocaleString("en-US")} profiles available.`;
-    }
+  function renderEmptyResults(titleText, bodyText) {
+    results.replaceChildren(createEmptyState(titleText, bodyText));
     resetPaginationUi();
   }
 
-  function renderPage(shouldScroll = false) {
-    const filtered = applyFilters();
+  function renderPrompt() {
+    resultsCount.textContent = `${totalProfiles} journal profiles ready.`;
+    if (pageMode === "home") {
+      renderEmptyResults(
+        "Enter an abstract or keyword query",
+        "Search results will appear here after you submit an abstract or keyword query from the form above."
+      );
+      return;
+    }
+    renderEmptyResults(
+      "Start your search",
+      "Search by abstract, keyword, title, publisher, country, or URL fragment."
+    );
+  }
+
+  function renderNlpHelp() {
+    resultsCount.textContent = `Add more specific terms to search ${totalProfiles} journal profiles.`;
+    renderEmptyResults(
+      "Enter more specific search terms",
+      "The current query only contains stop words or very short tokens. Add topic-specific words before searching again."
+    );
+  }
+
+  function renderLoadingState() {
+    resultsCount.textContent = `Preparing matches from ${totalProfiles} journal profiles.`;
+    results.replaceChildren(createEmptyState("Preparing search results", "Matching journal profiles are being loaded."));
+    resetPaginationUi();
+  }
+
+  async function ensureRecordsLoaded(state) {
+    const preferredChunkPaths = getPreferredChunkPaths(state);
+    const pendingChunkPaths = preferredChunkPaths.filter((chunkPath) => !loadedChunkMap.has(chunkPath));
+
+    if (!pendingChunkPaths.length) {
+      return mergeLoadedRecords();
+    }
+
+    if (!loadedChunkMap.size) {
+      renderLoadingState();
+    }
+
+    const fetchPromises = pendingChunkPaths.map((chunkPath) => {
+      if (loadingChunkMap.has(chunkPath)) {
+        return loadingChunkMap.get(chunkPath);
+      }
+
+      const fetchPromise = fetch(joinRelative(siteRoot, withVersion(chunkPath, versionTag)), { credentials: "same-origin" })
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`Failed to load search chunk: ${response.status}`);
+          }
+          const payload = await response.json();
+          const chunkRecords = payload.records || [];
+          prepareRecords(chunkRecords);
+          loadedChunkMap.set(chunkPath, chunkRecords);
+          return chunkRecords;
+        })
+        .finally(() => {
+          loadingChunkMap.delete(chunkPath);
+        });
+
+      loadingChunkMap.set(chunkPath, fetchPromise);
+      return fetchPromise;
+    });
+
+    await Promise.all(fetchPromises);
+    return mergeLoadedRecords();
+  }
+
+  function applyFilters(state) {
+    const matched = [];
+    const useQuery = state.query.shouldLoad;
+    for (const record of records) {
+      if (state.indexFilter === "wos" && !record.wos_indexed) continue;
+      if (state.indexFilter === "doaj" && !record.doaj_indexed) continue;
+      if (state.indexFilter === "scopus" && !record.scopus_indexed) continue;
+      if (state.quartileFilter !== "all" && record.sjr_best_quartile !== state.quartileFilter) continue;
+      if (state.countryFilter !== "all" && record.country !== state.countryFilter) continue;
+
+      const score = useQuery ? scoreRecord(record, state.query, state.scope) : 1;
+      if (!useQuery || score > 0) {
+        matched.push({ score, record });
+      }
+    }
+
+    matched.sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      if (left.record.rank !== right.record.rank) return left.record.rank - right.record.rank;
+      return left.record.title.localeCompare(right.record.title);
+    });
+    return matched;
+  }
+
+  function syncUrl(state) {
+    const nextParams = new URLSearchParams();
+    const rawQuery = queryInput.value.trim();
+
+    if (rawQuery) {
+      nextParams.set("q", rawQuery);
+    }
+    if (rawQuery && state.scope !== (pageMode === "home" ? "abstract" : "all")) {
+      nextParams.set("scope", state.scope);
+    }
+    if (pageMode === "search") {
+      if (state.indexFilter !== "all") nextParams.set("index", state.indexFilter);
+      if (state.quartileFilter !== "all") nextParams.set("quartile", state.quartileFilter);
+      if (state.countryFilter !== "all") nextParams.set("country", state.countryFilter);
+    }
+    if (page > 1 && (rawQuery || state.hasFilters)) {
+      nextParams.set("page", String(page));
+    }
+
+    const nextUrl = `${window.location.pathname}${nextParams.toString() ? `?${nextParams}` : ""}`;
+    window.history.replaceState({}, "", nextUrl);
+  }
+
+  function renderPage(state, shouldScroll = false) {
+    const filtered = applyFilters(state);
     const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
     if (page > totalPages) {
       page = totalPages;
@@ -962,24 +1079,19 @@ function renderSearchPage(manifest, siteRoot) {
     const pageItems = filtered.slice(start, start + perPage);
 
     results.replaceChildren();
-    if (resultsCount) {
-      resultsCount.textContent = `${filtered.length.toLocaleString("en-US")} matches found.`;
-    }
+    resultsCount.textContent = `${filtered.length.toLocaleString("en-US")} matches found.`;
 
     if (!pageItems.length) {
-      const empty = document.createElement("div");
-      empty.className = "empty-state";
-      const title = document.createElement("strong");
-      title.textContent = "No journals matched your query.";
-      empty.appendChild(title);
-      const body = document.createElement("span");
-      body.textContent = "Try broader keywords, switch the search scope, or remove one of the filters.";
-      empty.appendChild(body);
-      results.appendChild(empty);
+      const bodyText = pageMode === "home"
+        ? "Try a more specific abstract or keyword, or open advanced search for title and filter options."
+        : "Try broader keywords, switch the search scope, or remove one of the filters.";
+      results.appendChild(createEmptyState("No journals matched your query.", bodyText));
+      resetPaginationUi();
+      return;
     }
 
     for (const entry of pageItems) {
-      const { record, score, rawQuery, scope } = entry;
+      const { record, score } = entry;
       const article = document.createElement("article");
       article.className = "search-card";
 
@@ -1001,8 +1113,8 @@ function renderSearchPage(manifest, siteRoot) {
 
       article.appendChild(createResultSummary(record));
 
-      if (scope === "abstract") {
-        const insight = abstractInsight(record, rawQuery);
+      if (state.scope === "abstract") {
+        const insight = abstractInsight(record, state.query);
         if (insight) {
           article.appendChild(createInsightBox(insight, score));
         }
@@ -1034,8 +1146,9 @@ function renderSearchPage(manifest, siteRoot) {
 
     renderPaginationUi(totalPages, (nextPage) => {
       page = nextPage;
-      syncUrl();
-      renderPage(true);
+      const nextState = currentState();
+      syncUrl(nextState);
+      renderPage(nextState, true);
     });
 
     if (shouldScroll) {
@@ -1043,39 +1156,52 @@ function renderSearchPage(manifest, siteRoot) {
     }
   }
 
-  async function loadAndRenderPage() {
-    if (!shouldLoadDataset()) {
+  async function loadAndRenderPage(shouldScroll = false) {
+    const state = currentState();
+    if (state.shouldShowPrompt) {
+      page = 1;
+      syncUrl(state);
       renderPrompt();
       return;
     }
-    await ensureRecordsLoaded();
-    renderPage();
+    if (state.shouldShowNlpHelp) {
+      page = 1;
+      syncUrl(state);
+      renderNlpHelp();
+      return;
+    }
+    if (!state.shouldLoad) {
+      page = 1;
+      syncUrl(state);
+      renderPrompt();
+      return;
+    }
+
+    await ensureRecordsLoaded(state);
+    syncUrl(state);
+    renderPage(state, shouldScroll);
   }
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     page = 1;
-    syncUrl();
     loadAndRenderPage().catch((error) => {
       throw error;
     });
   });
 
-  for (const element of [scopeSelect, indexSelect, quartileSelect, countrySelect]) {
+  for (const element of [scopeField, indexSelect, quartileSelect, countrySelect].filter(Boolean)) {
     element.addEventListener("change", () => {
       page = 1;
-      syncUrl();
       loadAndRenderPage().catch((error) => {
         throw error;
       });
     });
   }
 
-  if (shouldLoadDataset()) {
-    loadAndRenderPage();
-  } else {
-    renderPrompt();
-  }
+  loadAndRenderPage().catch((error) => {
+    throw error;
+  });
 }
 
 async function init() {
@@ -1083,11 +1209,7 @@ async function init() {
   const page = body.dataset.page;
   const siteRoot = body.dataset.siteRoot || ".";
   const dataUrl = body.dataset.dataUrl;
-  if (!page) {
-    return;
-  }
-
-  if (!dataUrl) {
+  if (!page || !dataUrl) {
     return;
   }
 
@@ -1097,13 +1219,8 @@ async function init() {
   }
   const payload = await response.json();
 
-  if (page === "home") {
-    const records = payload.records || [];
-    prepareRecords(records);
-    renderHomePage(records, siteRoot);
-  }
-  if (page === "search") {
-    renderSearchPage(payload, siteRoot);
+  if (page === "home" || page === "search") {
+    renderSearchExperience(payload, siteRoot, page);
   }
   if (page === "profile") {
     await renderDynamicProfile(payload, siteRoot);
@@ -1114,14 +1231,7 @@ document.addEventListener("DOMContentLoaded", () => {
   init().catch((error) => {
     const target = document.querySelector("#app-error") || document.querySelector("main");
     if (target) {
-      const box = document.createElement("div");
-      box.className = "empty-state";
-      const title = document.createElement("strong");
-      title.textContent = "The discovery interface could not load.";
-      box.appendChild(title);
-      const body = document.createElement("span");
-      body.textContent = error.message;
-      box.appendChild(body);
+      const box = createEmptyState("The discovery interface could not load.", error.message);
       target.prepend(box);
     }
   });

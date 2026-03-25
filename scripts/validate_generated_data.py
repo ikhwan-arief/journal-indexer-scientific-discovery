@@ -19,8 +19,8 @@ MANIFEST_PATH = DOCS_DIR / "data" / "search-manifest.json"
 PROFILE_INDEX_PATH = DOCS_DIR / "data" / "profile-index.json"
 LEGACY_REDIRECT_PATH = DOCS_DIR / "404.html"
 
-REQUIRED_HOME_KEYS = {"sourceid", "title", "slug"}
 REQUIRED_SEARCH_KEYS = {"sourceid", "title", "slug", "categories", "areas"}
+REQUIRED_HOME_UI_KEYS = {"eyebrow", "title", "description"}
 
 
 def load_json(path: Path) -> dict[str, object]:
@@ -52,14 +52,18 @@ def main() -> int:
     if expected_total <= 0:
         raise SystemExit("search-manifest.json has an invalid total_journals summary.")
 
-    home_records = home_payload.get("records") or []
-    if not isinstance(home_records, list) or not home_records:
-        raise SystemExit("home.json does not contain any records.")
-    if len(home_records) != expected_total:
-        raise SystemExit(
-            f"home.json record count {len(home_records)} does not match summary total_journals {expected_total}."
-        )
-    ensure_keys(home_records[0], REQUIRED_HOME_KEYS, "home.json")
+    home_summary = home_payload.get("summary") or {}
+    if not isinstance(home_summary, dict):
+        raise SystemExit("home.json does not contain a summary object.")
+    if int(home_summary.get("total_journals") or 0) != expected_total:
+        raise SystemExit("home.json summary total_journals does not match search-manifest.json.")
+
+    home_ui = home_payload.get("ui") or {}
+    if not isinstance(home_ui, dict):
+        raise SystemExit("home.json does not contain a ui object.")
+    missing_home_ui = sorted(key for key in REQUIRED_HOME_UI_KEYS if key not in home_ui)
+    if missing_home_ui:
+        raise SystemExit(f"home.json ui is missing required keys: {missing_home_ui}")
 
     chunk_paths = manifest.get("chunk_paths") or []
     if not isinstance(chunk_paths, list) or not chunk_paths:
@@ -101,12 +105,6 @@ def main() -> int:
         raise SystemExit(
             f"Combined search chunk record count {len(search_records)} does not match summary total_journals {expected_total}."
         )
-
-    home_keys = {record_key(record) for record in home_records}
-    if len(home_keys) != len(home_records):
-        raise SystemExit("Duplicate sourceid/slug pairs detected in home.json.")
-    if home_keys != seen_search_keys:
-        raise SystemExit("home.json and search chunk records do not describe the same journal set.")
 
     search_sourceids = {str(record.get("sourceid") or "") for record in search_records}
     if set(sourceid_to_chunk) != search_sourceids:
@@ -166,7 +164,7 @@ def main() -> int:
                 )
 
     print(
-        "Generated data validation passed: home/search totals match, shard files exist, the 404 legacy redirect page exists, profile index mappings are consistent, title-prefix mappings are consistent, and country metadata matches the chunk dataset."
+        "Generated data validation passed: home summary metadata matches the search manifest, shard files exist, the 404 legacy redirect page exists, profile index mappings are consistent, title-prefix mappings are consistent, and country metadata matches the chunk dataset."
     )
     print(f"Validated journals: {expected_total}")
     print(f"Validated shard files: {len(chunk_paths)}")
