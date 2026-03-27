@@ -55,8 +55,18 @@ const INDONESIAN_SUFFIX_RULES = [
 const ABSTRACT_TITLE_WEIGHT = 10;
 const ABSTRACT_CATEGORY_WEIGHT = 42;
 const ABSTRACT_AREA_WEIGHT = 30;
+const ABSTRACT_TITLE_PHRASE_WEIGHT = 24;
+const ABSTRACT_CATEGORY_PHRASE_WEIGHT = 38;
+const ABSTRACT_AREA_PHRASE_WEIGHT = 30;
+const ABSTRACT_TITLE_CONCEPT_WEIGHT = 16;
+const ABSTRACT_CATEGORY_CONCEPT_WEIGHT = 24;
+const ABSTRACT_AREA_CONCEPT_WEIGHT = 20;
 const ABSTRACT_DETAIL_BONUS = 12;
+const ABSTRACT_PHRASE_DETAIL_BONUS = 10;
+const ABSTRACT_CONCEPT_DETAIL_BONUS = 8;
 const ABSTRACT_FIELD_COVERAGE_BONUS = 8;
+const ABSTRACT_PHRASE_LIMIT = 60;
+const ABSTRACT_RECORD_PHRASE_LIMIT = 18;
 const ABSTRACT_LOW_SIGNAL_TOKEN_WEIGHT = 0.25;
 const ABSTRACT_TOKEN_SIGNAL_REFERENCE = 60;
 const ABSTRACT_TOKEN_SIGNAL_MIN = 0.6;
@@ -66,6 +76,46 @@ const ABSTRACT_LOW_SIGNAL_TERMS = [
   "performance", "program", "strategy", "design", "evaluation", "practice", "management", "policy",
   "development", "science", "engineering", "health", "public", "clinical", "care", "knowledge",
   "communication", "process", "review"
+];
+const ABSTRACT_CONCEPT_ALIASES = [
+  { concept: "artificial_intelligence", label: "artificial intelligence", aliases: ["artificial intelligence", "ai"] },
+  { concept: "generative_artificial_intelligence", label: "generative artificial intelligence", aliases: ["generative artificial intelligence", "generative ai", "genai"] },
+  { concept: "large_language_model", label: "large language model", aliases: ["large language model", "large language models", "llm", "llms"] },
+  { concept: "machine_learning", label: "machine learning", aliases: ["machine learning", "ml"] },
+  { concept: "deep_learning", label: "deep learning", aliases: ["deep learning"] },
+  { concept: "digital_transformation", label: "digital transformation", aliases: ["digital transformation", "digitalisation", "digitalization", "digitisation", "digitization"] },
+  {
+    concept: "small_medium_enterprise",
+    label: "small and medium enterprises",
+    aliases: [
+      "small and medium sized enterprises",
+      "small and medium sized enterprise",
+      "small and medium enterprises",
+      "small and medium enterprise",
+      "small medium enterprises",
+      "small medium enterprise",
+      "smes",
+      "sme",
+      "msmes",
+      "msme",
+      "ukm",
+      "umkm"
+    ],
+  },
+  { concept: "industry_4_0", label: "industry 4.0", aliases: ["industry 4 0", "industry4 0", "industry4.0", "industrie 4 0"] },
+  { concept: "internet_of_things", label: "internet of things", aliases: ["internet of things", "iot"] },
+  { concept: "supply_chain", label: "supply chain", aliases: ["supply chain", "supply chains"] },
+  { concept: "resource_based_view", label: "resource based view", aliases: ["resource based view", "resource based theory", "rbv"] },
+  { concept: "knowledge_based_view", label: "knowledge based view", aliases: ["knowledge based view", "kbv"] },
+  { concept: "dynamic_capability", label: "dynamic capabilities", aliases: ["dynamic capabilities", "dynamic capability", "dynamic managerial capabilities"] },
+  { concept: "knowledge_management", label: "knowledge management", aliases: ["knowledge management", "knowledge sharing", "knowledge integration"] },
+  { concept: "business_intelligence", label: "business intelligence", aliases: ["business intelligence"] },
+  { concept: "big_data_analytics", label: "big data analytics", aliases: ["big data analytics", "business analytics", "data analytics"] },
+  { concept: "financial_management", label: "financial management", aliases: ["financial management", "financial diagnostics"] },
+  { concept: "decision_support", label: "decision support", aliases: ["decision support", "decision making", "decision-making"] },
+  { concept: "competitive_advantage", label: "competitive advantage", aliases: ["competitive advantage", "sustainable competitive advantage"] },
+  { concept: "green_innovation", label: "green innovation", aliases: ["green innovation", "environmental innovation"] },
+  { concept: "e_commerce", label: "e-commerce", aliases: ["e commerce", "ecommerce"] },
 ];
 
 let abstractTokenDocumentCounts = new Map();
@@ -92,6 +142,13 @@ function uniqueTokens(tokens) {
   }
   return values;
 }
+
+const ABSTRACT_CONCEPT_RULES = ABSTRACT_CONCEPT_ALIASES.map((entry) => ({
+  token: `concept_${entry.concept}`,
+  label: entry.label,
+  aliases: entry.aliases.map((alias) => normalizeText(alias)).filter(Boolean),
+}));
+const ABSTRACT_CONCEPT_LABELS = new Map(ABSTRACT_CONCEPT_RULES.map((entry) => [entry.token, entry.label]));
 
 function searchPrefix(value) {
   const normalized = normalizeText(value);
@@ -164,25 +221,124 @@ function tokenizeSearchText(value, options = {}) {
   return processed;
 }
 
+function orderedSearchTokens(value, options = {}) {
+  const { removeStopWords = true, minLength = 3, applyStemming = true } = options;
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return [];
+  }
+
+  const processed = [];
+  for (const rawToken of normalized.split(" ")) {
+    if (!rawToken) {
+      continue;
+    }
+    const token = applyStemming ? stemToken(rawToken) : rawToken;
+    if (!token || token.length < minLength) {
+      continue;
+    }
+    if (removeStopWords && (SEARCH_STOP_WORDS.has(rawToken) || SEARCH_STOP_WORDS.has(token))) {
+      continue;
+    }
+    processed.push(token);
+  }
+
+  return processed;
+}
+
+function extractConceptTokens(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return [];
+  }
+
+  const padded = ` ${normalized} `;
+  const matches = [];
+  for (const rule of ABSTRACT_CONCEPT_RULES) {
+    if (rule.aliases.some((alias) => padded.includes(` ${alias} `))) {
+      matches.push(rule.token);
+    }
+  }
+  return matches;
+}
+
+function extractPhraseTokens(value, options = {}) {
+  const { maxPhrases = ABSTRACT_PHRASE_LIMIT } = options;
+  const orderedTokens = orderedSearchTokens(value);
+  if (!orderedTokens.length || maxPhrases <= 0) {
+    return [];
+  }
+
+  const phraseEntries = [];
+  for (const size of [3, 2]) {
+    for (let index = 0; index <= orderedTokens.length - size; index += 1) {
+      const slice = orderedTokens.slice(index, index + size);
+      if (slice.length !== size || slice.some((token) => ABSTRACT_LOW_SIGNAL_TOKENS.has(token))) {
+        continue;
+      }
+      const phrase = `phrase_${slice.join("_")}`;
+      const specificity = slice.reduce((total, token) => total + Math.min(token.length, 12), 0) + (size * 6);
+      phraseEntries.push({ phrase, specificity, position: index });
+    }
+  }
+
+  phraseEntries.sort((left, right) => {
+    if (right.specificity !== left.specificity) return right.specificity - left.specificity;
+    return left.position - right.position;
+  });
+
+  const phrases = [];
+  const seen = new Set();
+  for (const entry of phraseEntries) {
+    if (seen.has(entry.phrase)) {
+      continue;
+    }
+    seen.add(entry.phrase);
+    phrases.push(entry.phrase);
+    if (phrases.length >= maxPhrases) {
+      break;
+    }
+  }
+  return phrases;
+}
+
+function displayAbstractSignal(signal) {
+  if (!signal) {
+    return signal;
+  }
+  if (signal.startsWith("concept_")) {
+    return ABSTRACT_CONCEPT_LABELS.get(signal) || signal.slice(8).replaceAll("_", " ");
+  }
+  if (signal.startsWith("phrase_")) {
+    return signal.slice(7).replaceAll("_", " ");
+  }
+  return signal;
+}
+
 function buildProcessedQuery(rawValue, scope) {
   const normalized = normalizeText(rawValue);
   const literalTokens = normalized ? normalized.split(" ").filter(Boolean) : [];
   const tokens = tokenizeSearchText(rawValue);
+  const conceptTokens = extractConceptTokens(rawValue);
+  const phraseTokens = extractPhraseTokens(rawValue);
   const allTokensAreInsignificant = literalTokens.length > 0 && literalTokens.every((token) => {
     const stemmed = stemToken(token);
     return token.length < 3 || SEARCH_STOP_WORDS.has(token) || SEARCH_STOP_WORDS.has(stemmed);
   });
   const canUseLiteralOnly = isPreciseScope(scope) && normalized.length >= 2 && !allTokensAreInsignificant;
+  const hasMeaningfulSignals = tokens.length > 0 || conceptTokens.length > 0 || phraseTokens.length > 0;
 
   return {
     raw: rawValue || "",
     normalized,
     literalTokens,
     tokens,
+    conceptTokens,
+    phraseTokens,
     hasRawQuery: Boolean(normalized),
-    hasMeaningfulTokens: tokens.length > 0,
+    hasMeaningfulTokens: hasMeaningfulSignals,
     canUseLiteralOnly,
-    shouldLoad: tokens.length > 0 || canUseLiteralOnly,
+    shouldLoad: hasMeaningfulSignals || canUseLiteralOnly,
   };
 }
 
@@ -213,9 +369,15 @@ function buildAbstractTokenSignals(records) {
   const counts = new Map();
   for (const record of records) {
     const uniqueRecordTokens = new Set([
-      ...(record.title_tokens || []),
-      ...(record.category_tokens || []),
-      ...(record.area_tokens || []),
+      ...(record.abstract_title_tokens || []),
+      ...(record.abstract_category_specific_tokens || []),
+      ...(record.abstract_area_specific_tokens || []),
+      ...(record.title_phrase_tokens || []),
+      ...(record.category_phrase_tokens || []),
+      ...(record.area_phrase_tokens || []),
+      ...(record.title_concept_tokens || []),
+      ...(record.category_concept_tokens || []),
+      ...(record.area_concept_tokens || []),
     ]);
     for (const token of uniqueRecordTokens) {
       counts.set(token, (counts.get(token) || 0) + 1);
@@ -396,6 +558,12 @@ function prepareRecords(records) {
     record.url_tokens = tokenizeSearchText(record.journal_url || "");
     record.category_tokens = tokenizeSearchText(record.categories || "");
     record.area_tokens = tokenizeSearchText(record.areas || "");
+    record.title_phrase_tokens = extractPhraseTokens(record.title || "", { maxPhrases: ABSTRACT_RECORD_PHRASE_LIMIT });
+    record.category_phrase_tokens = extractPhraseTokens(record.categories || "", { maxPhrases: ABSTRACT_RECORD_PHRASE_LIMIT });
+    record.area_phrase_tokens = extractPhraseTokens(record.areas || "", { maxPhrases: ABSTRACT_RECORD_PHRASE_LIMIT });
+    record.title_concept_tokens = extractConceptTokens(record.title || "");
+    record.category_concept_tokens = extractConceptTokens(record.categories || "");
+    record.area_concept_tokens = extractConceptTokens(record.areas || "");
     record.index_tokens = tokenizeSearchText(record.index_summary);
     record.issn_tokens = tokenizeSearchText((record.issns || []).join(" "), { removeStopWords: false, applyStemming: false });
     record.abstract_title_tokens = record.title_tokens.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
@@ -419,6 +587,12 @@ function prepareRecords(records) {
     record.url_token_set = new Set(record.url_tokens);
     record.category_token_set = new Set(record.category_tokens);
     record.area_token_set = new Set(record.area_tokens);
+    record.title_phrase_token_set = new Set(record.title_phrase_tokens);
+    record.category_phrase_token_set = new Set(record.category_phrase_tokens);
+    record.area_phrase_token_set = new Set(record.area_phrase_tokens);
+    record.title_concept_token_set = new Set(record.title_concept_tokens);
+    record.category_concept_token_set = new Set(record.category_concept_tokens);
+    record.area_concept_token_set = new Set(record.area_concept_tokens);
     record.topic_token_set = new Set(record.topic_tokens);
     record.search_token_set = new Set(record.search_tokens);
     record.issn_token_set = new Set(record.issn_tokens);
@@ -485,8 +659,16 @@ function abstractMatchSummary(record, query) {
   const titleMatches = tokenMatches(record.title_token_set, query.tokens);
   const categoryMatches = tokenMatches(record.category_token_set, query.tokens);
   const areaMatches = tokenMatches(record.area_token_set, query.tokens);
+  const titlePhraseMatches = tokenMatches(record.title_phrase_token_set, query.phraseTokens);
+  const categoryPhraseMatches = tokenMatches(record.category_phrase_token_set, query.phraseTokens);
+  const areaPhraseMatches = tokenMatches(record.area_phrase_token_set, query.phraseTokens);
+  const titleConceptMatches = tokenMatches(record.title_concept_token_set, query.conceptTokens);
+  const categoryConceptMatches = tokenMatches(record.category_concept_token_set, query.conceptTokens);
+  const areaConceptMatches = tokenMatches(record.area_concept_token_set, query.conceptTokens);
   const matchedTerms = mergeTokenLists(titleMatches, categoryMatches, areaMatches);
-  if (!matchedTerms.length) {
+  const matchedPhrases = mergeTokenLists(titlePhraseMatches, categoryPhraseMatches, areaPhraseMatches);
+  const matchedConcepts = mergeTokenLists(titleConceptMatches, categoryConceptMatches, areaConceptMatches);
+  if (!matchedTerms.length && !matchedPhrases.length && !matchedConcepts.length) {
     return null;
   }
 
@@ -494,41 +676,75 @@ function abstractMatchSummary(record, query) {
   const specificCategoryMatches = specificAbstractTokens(categoryMatches);
   const specificAreaMatches = specificAbstractTokens(areaMatches);
   const specificTerms = mergeTokenLists(specificTitleMatches, specificCategoryMatches, specificAreaMatches);
-  const matchedFieldCount = [titleMatches, categoryMatches, areaMatches].filter((matches) => matches.length).length;
+  const matchedFieldCount = [
+    mergeTokenLists(titleMatches, titlePhraseMatches, titleConceptMatches),
+    mergeTokenLists(categoryMatches, categoryPhraseMatches, categoryConceptMatches),
+    mergeTokenLists(areaMatches, areaPhraseMatches, areaConceptMatches),
+  ].filter((matches) => matches.length).length;
 
-  const titleScore = Math.round(weightedAbstractTokenSum(specificTitleMatches) * ABSTRACT_TITLE_WEIGHT);
-  const categoryScore = Math.round(weightedAbstractTokenSum(categoryMatches) * ABSTRACT_CATEGORY_WEIGHT);
-  const areaScore = Math.round(weightedAbstractTokenSum(areaMatches) * ABSTRACT_AREA_WEIGHT);
-  const detailScore = specificTerms.length * ABSTRACT_DETAIL_BONUS;
-  const fieldCoverageScore = Math.max(0, matchedFieldCount - 1) * ABSTRACT_FIELD_COVERAGE_BONUS;
-  const score = titleScore + categoryScore + areaScore + detailScore + fieldCoverageScore;
-
-  const queryRelevantTokens = specificAbstractTokens(query.tokens).filter((token) => abstractTokenDocumentCounts.has(token));
+  const queryRelevantTokens = mergeTokenLists(
+    specificAbstractTokens(query.tokens).filter((token) => abstractTokenDocumentCounts.has(token)),
+    query.conceptTokens,
+    query.phraseTokens
+  );
   const queryRelevantWeight = weightedAbstractTokenSum(queryRelevantTokens);
   const journalSpecificTokens = mergeTokenLists(
     record.abstract_title_tokens,
     record.abstract_category_specific_tokens,
-    record.abstract_area_specific_tokens
+    record.abstract_area_specific_tokens,
+    record.title_phrase_tokens,
+    record.category_phrase_tokens,
+    record.area_phrase_tokens,
+    record.title_concept_tokens,
+    record.category_concept_tokens,
+    record.area_concept_tokens
   );
   const journalSpecificWeight = weightedAbstractTokenSum(journalSpecificTokens);
-  const matchedSpecificTerms = specificTerms.length ? specificTerms : matchedTerms;
+  const matchedSpecificTerms = mergeTokenLists(
+    specificTerms.length ? specificTerms : matchedTerms,
+    matchedPhrases,
+    matchedConcepts
+  );
   const matchedSpecificWeight = weightedAbstractTokenSum(matchedSpecificTerms);
   const precision = journalSpecificWeight ? matchedSpecificWeight / journalSpecificWeight : 0;
   const recall = queryRelevantWeight ? matchedSpecificWeight / queryRelevantWeight : 0;
+  const titleScore = Math.round(weightedAbstractTokenSum(specificTitleMatches) * ABSTRACT_TITLE_WEIGHT);
+  const categoryScore = Math.round(weightedAbstractTokenSum(categoryMatches) * ABSTRACT_CATEGORY_WEIGHT);
+  const areaScore = Math.round(weightedAbstractTokenSum(areaMatches) * ABSTRACT_AREA_WEIGHT);
+  const titlePhraseScore = Math.round(weightedAbstractTokenSum(titlePhraseMatches) * ABSTRACT_TITLE_PHRASE_WEIGHT);
+  const categoryPhraseScore = Math.round(weightedAbstractTokenSum(categoryPhraseMatches) * ABSTRACT_CATEGORY_PHRASE_WEIGHT);
+  const areaPhraseScore = Math.round(weightedAbstractTokenSum(areaPhraseMatches) * ABSTRACT_AREA_PHRASE_WEIGHT);
+  const titleConceptScore = Math.round(weightedAbstractTokenSum(titleConceptMatches) * ABSTRACT_TITLE_CONCEPT_WEIGHT);
+  const categoryConceptScore = Math.round(weightedAbstractTokenSum(categoryConceptMatches) * ABSTRACT_CATEGORY_CONCEPT_WEIGHT);
+  const areaConceptScore = Math.round(weightedAbstractTokenSum(areaConceptMatches) * ABSTRACT_AREA_CONCEPT_WEIGHT);
+  const detailScore = specificTerms.length * ABSTRACT_DETAIL_BONUS;
+  const phraseDetailScore = matchedPhrases.length * ABSTRACT_PHRASE_DETAIL_BONUS;
+  const conceptDetailScore = matchedConcepts.length * ABSTRACT_CONCEPT_DETAIL_BONUS;
+  const fieldCoverageScore = Math.max(0, matchedFieldCount - 1) * ABSTRACT_FIELD_COVERAGE_BONUS;
+  const alignmentScore = Math.round((precision * 80) + (recall * 35));
+  const breadthPenalty = Math.round(Math.max(0, journalSpecificWeight - matchedSpecificWeight) * 4);
+  const baseScore = titleScore + categoryScore + areaScore + titlePhraseScore + categoryPhraseScore + areaPhraseScore
+    + titleConceptScore + categoryConceptScore + areaConceptScore + detailScore + phraseDetailScore
+    + conceptDetailScore + fieldCoverageScore;
+  const score = Math.max(1, baseScore + alignmentScore - breadthPenalty);
   const fitPercentage = Math.max(
     0,
     Math.min(100, Math.round(((precision * 0.7) + (recall * 0.3)) * 100 + (Math.max(0, matchedFieldCount - 1) * 5)))
   );
 
   const fields = [];
-  if (titleMatches.length) fields.push("Title");
-  if (categoryMatches.length) fields.push("Categories");
-  if (areaMatches.length) fields.push("Areas");
+  if (mergeTokenLists(titleMatches, titlePhraseMatches, titleConceptMatches).length) fields.push("Title");
+  if (mergeTokenLists(categoryMatches, categoryPhraseMatches, categoryConceptMatches).length) fields.push("Categories");
+  if (mergeTokenLists(areaMatches, areaPhraseMatches, areaConceptMatches).length) fields.push("Areas");
 
   return {
     score,
     fitPercentage,
-    terms: (specificTerms.length ? specificTerms : matchedTerms).slice(0, 8),
+    terms: uniqueTokens([
+      ...(specificTerms.length ? specificTerms : matchedTerms),
+      ...matchedPhrases,
+      ...matchedConcepts,
+    ]).map((term) => displayAbstractSignal(term)).slice(0, 8),
     fields,
   };
 }

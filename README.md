@@ -15,7 +15,7 @@ Journal Discovery is a static journal discovery website designed for public host
 - Shows the `SJR Best Quartile` on a single runtime-loaded journal profile page keyed by stable `sourceid` values.
 - Exposes a search page for abstract, keyword, title, URL fragment, country, index filter, quartile filter, and abstract-fit result sorting.
 - Applies lightweight NLP preprocessing to abstract and keyword search: normalization, tokenization, stop-word removal (English + Indonesian), and conservative stemming.
-- Scores abstract matching from the journal `Title`, `Categories`, and `Areas` fields in `scimagojr.csv`, with generic abstract terms weighted below specific topical terms.
+- Scores abstract matching from the journal `Title`, `Categories`, and `Areas` fields in `scimagojr.csv`, with generic abstract terms weighted below specific topical terms plus phrase-aware matching and conservative acronym/synonym expansion for recurring SME, AI, and digital-transformation concepts.
 - Shows `Categories` and `Areas` on the journal profile page and on the search result profile cards.
 - Fills journal website, APC status, license, and copyright fields from DOAJ when a journal matches by ISSN or unique exact title.
 
@@ -73,6 +73,12 @@ python scripts/build_site.py
 ## Browser smoke test
 
 Use the smoke test to verify that the homepage stays idle on first load, homepage search renders results only after submit, stop-word-only homepage queries stay idle, the advanced search page stays idle on first load, scope-only changes do not trigger shard loading, title-scoped queries only fetch the expected shard files, deep-linked filters load correctly, and abstract searches render match insight cards.
+
+## Local benchmark
+
+Use `./.venv/bin/python scripts/benchmark_abstract_matching.py` to run a small abstract-matching benchmark against article PDFs in `~/Documents/Disertasi/refs`.
+
+Use `--refs-dir /path/to/refs` when your dissertation PDF folder lives elsewhere.
 
 ## Generated data validation
 
