@@ -80,6 +80,8 @@ Use `./.venv/bin/python scripts/benchmark_abstract_matching.py` to run a small a
 
 Use `--refs-dir /path/to/refs` when your dissertation PDF folder lives elsewhere.
 
+Use `./.venv/bin/python scripts/benchmark_doaj_relevance.py` to run a DOAJ-based relevance benchmark that samples recent article abstracts across several broad domains without storing an API key in the repository. This benchmark reports relevance-oriented metrics such as `Hit@5`, `MRR`, and `nDCG@10`, and keeps exact source-journal retrieval as a secondary signal only.
+
 ## Generated data validation
 
 Use the generated data validator to confirm that `home.json`, `search-manifest.json`, and all sharded search payloads are structurally consistent before opening a browser.
