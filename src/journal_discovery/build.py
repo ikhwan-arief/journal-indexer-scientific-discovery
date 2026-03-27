@@ -752,7 +752,7 @@ def search_page_html(summary: SiteSummary) -> str:
             <div>
               <p class=\"eyebrow results-eyebrow\">ADVANCED SEARCH</p>
               <h2>Search journal profiles</h2>
-              <p class=\"table-note\">Search by abstract, keyword, title, publisher, URL fragment, indexing status, best quartile, or country. Abstract searches can also be sorted by the displayed fit percentage.</p>
+              <p class=\"table-note\">Search by abstract, keyword, title, publisher, URL fragment, indexing status, best quartile, or country. Choosing <strong>Highest abstract fit</strong> will switch the scope to abstract matching automatically.</p>
             </div>
             <div class=\"table-chip\" id=\"results-summary\">{total_profiles} journal profiles ready</div>
           </div>

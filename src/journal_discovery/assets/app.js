@@ -1008,45 +1008,38 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
   if (quartileSelect) quartileSelect.value = params.get("quartile") || "all";
   if (countrySelect) countrySelect.value = params.get("country") || "all";
   if (sortSelect) sortSelect.value = normalizeSortOrder(params.get("sort") || "default");
+  if (sortSelect?.value === "fit_desc" && currentScope() !== "abstract" && scopeField.tagName === "SELECT") {
+    scopeField.value = "abstract";
+  }
   page = Math.max(1, Number.parseInt(params.get("page") || "1", 10) || 1);
 
   function currentScope() {
     return scopeField.value || (pageMode === "home" ? "abstract" : "all");
   }
 
-  function syncSortControl(scope) {
+  function alignSortWithScope(scope) {
     if (!sortSelect) {
-      return;
+      return "default";
     }
 
-    const currentSort = normalizeSortOrder(sortSelect.value || "default");
-    const storedSort = normalizeSortOrder(sortSelect.dataset.abstractSort || currentSort);
-    if (scope === "abstract") {
-      sortSelect.disabled = false;
-      sortSelect.title = "";
-      sortSelect.value = currentSort === "default" ? storedSort : currentSort;
-      return;
+    let sortOrder = normalizeSortOrder(sortSelect.value || "default");
+    if (sortOrder === "fit_desc" && scope !== "abstract") {
+      sortOrder = "default";
+      sortSelect.value = sortOrder;
     }
 
-    sortSelect.dataset.abstractSort = currentSort;
-    sortSelect.disabled = true;
-    sortSelect.title = "Abstract fit sorting is available only for abstract scope.";
-    sortSelect.value = "default";
+    sortSelect.title = scope === "abstract" ? "" : "Highest abstract fit applies only to abstract scope.";
+    return sortOrder;
   }
 
   function currentState() {
     const scope = currentScope();
-    syncSortControl(scope);
     const query = buildProcessedQuery(queryInput.value, scope);
     const indexFilter = indexSelect?.value || "all";
     const quartileFilter = quartileSelect?.value || "all";
     const countryFilter = countrySelect?.value || "all";
-    const sortOrder = normalizeSortOrder(sortSelect?.value || "default");
+    const sortOrder = alignSortWithScope(scope);
     const hasFilters = indexFilter !== "all" || quartileFilter !== "all" || countryFilter !== "all";
-
-    if (sortSelect && scope === "abstract") {
-      sortSelect.dataset.abstractSort = sortOrder;
-    }
 
     return {
       scope,
@@ -1383,8 +1376,23 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
     });
   });
 
-  for (const element of [scopeField, indexSelect, quartileSelect, countrySelect, sortSelect].filter(Boolean)) {
+  for (const element of [scopeField, indexSelect, quartileSelect, countrySelect].filter(Boolean)) {
     element.addEventListener("change", () => {
+      if (element === scopeField && sortSelect && currentScope() !== "abstract") {
+        sortSelect.value = "default";
+      }
+      page = 1;
+      loadAndRenderPage().catch((error) => {
+        throw error;
+      });
+    });
+  }
+
+  if (sortSelect) {
+    sortSelect.addEventListener("change", () => {
+      if (sortSelect.value === "fit_desc" && currentScope() !== "abstract" && scopeField.tagName === "SELECT") {
+        scopeField.value = "abstract";
+      }
       page = 1;
       loadAndRenderPage().catch((error) => {
         throw error;

@@ -287,11 +287,29 @@ def main() -> int:
         if not first_title.strip():
             raise AssertionError("Expected abstract search to render at least one result title.")
 
+        sort_switch_page = browser.new_page()
+        sort_switch_page.goto(f"{base_url}/search/", wait_until="networkidle")
+        sort_switch_page.wait_for_selector("#search-form")
+        sort_switch_page.select_option("#sort-order", "fit_desc")
+        sort_switch_page.wait_for_function(
+            """() => {
+                const scope = document.querySelector('#scope');
+                const sort = document.querySelector('#sort-order');
+                return scope?.value === 'abstract' && sort?.value === 'fit_desc';
+            }""",
+            timeout=10000,
+        )
+
         long_fit_page = browser.new_page()
         long_fit_page.goto(f"{base_url}/search/", wait_until="networkidle")
         long_fit_page.wait_for_selector("#search-form")
-        submit_search(long_fit_page, LONG_ABSTRACT_FIT_QUERY, scope="abstract", sort="fit_desc")
+        submit_search(long_fit_page, LONG_ABSTRACT_FIT_QUERY, scope="abstract")
         long_fit_page.wait_for_selector(".match-insight strong", timeout=20000)
+        long_fit_page.select_option("#sort-order", "fit_desc")
+        long_fit_page.wait_for_function(
+            """() => new URLSearchParams(window.location.search).get('sort') === 'fit_desc'""",
+            timeout=10000,
+        )
         top_fit_labels = [text.strip() for text in long_fit_page.locator(".match-insight strong").all_inner_texts()[:5]]
         if not top_fit_labels:
             raise AssertionError("Expected long abstract search to render fit labels.")
@@ -333,7 +351,7 @@ def main() -> int:
         browser.close()
 
     print(
-        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, the homepage exposed abstract-fit sorting, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, metric-based sorting ordered cancer results by descending SJR, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, long abstract top matches exceeded 2% fit labels and respected descending fit sorting, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
+        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, the homepage exposed abstract-fit sorting, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, metric-based sorting ordered cancer results by descending SJR, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, advanced search auto-switched to abstract scope when fit sorting was selected, long abstract top matches exceeded 2% fit labels and respected descending fit sorting after re-sorting, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
     )
     print(f"Prefix 'a' shards: {sorted(expected_a)}")
     print(f"Prefix 'j' shards: {sorted(expected_j)}")
