@@ -25,7 +25,10 @@ except ImportError as error:
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS_DIR = REPO_ROOT / "docs"
 MANIFEST_PATH = DOCS_DIR / "data" / "search-manifest.json"
-LONG_ABSTRACT_FIT_QUERY = " ".join([f"syntheticterm{i:03d}" for i in range(1, 501)] + ["public", "health"])
+LONG_ABSTRACT_FIT_QUERY = " ".join(
+    [f"syntheticterm{i:03d}" for i in range(1, 401)]
+    + ["machine", "learning", "neural", "network", "ophthalmology", "fundus", "imaging", "diabetic", "retinopathy"]
+)
 
 
 class QuietRequestHandler(SimpleHTTPRequestHandler):
@@ -281,9 +284,15 @@ def main() -> int:
         top_fit_labels = [text.strip() for text in long_fit_page.locator(".match-insight strong").all_inner_texts()[:5]]
         if not top_fit_labels:
             raise AssertionError("Expected long abstract search to render fit labels.")
-        if any(label == "Abstract fit: 0%" for label in top_fit_labels):
+        top_fit_values = []
+        for label in top_fit_labels:
+            match = re.search(r"Abstract fit:\s*(\d+)%", label)
+            if not match:
+                raise AssertionError(f"Expected a parsable fit label, got: {label}")
+            top_fit_values.append(int(match.group(1)))
+        if max(top_fit_values) <= 2:
             raise AssertionError(
-                f"Expected long abstract top matches to avoid 0% fit labels, got: {top_fit_labels}"
+                f"Expected long abstract top matches to exceed 2% fit, got labels: {top_fit_labels}"
             )
 
         profile_href = filter_page.locator(".search-card h3 a").first.get_attribute("href")
@@ -309,7 +318,7 @@ def main() -> int:
         browser.close()
 
     print(
-        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, metric-based sorting ordered cancer results by descending SJR, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, long abstract top matches avoided 0% fit labels, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
+        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, metric-based sorting ordered cancer results by descending SJR, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, long abstract top matches exceeded 2% fit labels, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
     )
     print(f"Prefix 'a' shards: {sorted(expected_a)}")
     print(f"Prefix 'j' shards: {sorted(expected_j)}")

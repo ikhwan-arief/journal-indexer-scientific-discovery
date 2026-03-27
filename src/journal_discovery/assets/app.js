@@ -248,6 +248,10 @@ function weightedAbstractTokenSum(tokens) {
   return total;
 }
 
+function specificAbstractTokens(tokens) {
+  return (tokens || []).filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
+}
+
 function joinRelative(siteRoot, relativePath) {
   if (!relativePath) {
     return siteRoot || ".";
@@ -486,9 +490,9 @@ function abstractMatchSummary(record, query) {
     return null;
   }
 
-  const specificTitleMatches = titleMatches.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
-  const specificCategoryMatches = categoryMatches.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
-  const specificAreaMatches = areaMatches.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
+  const specificTitleMatches = specificAbstractTokens(titleMatches);
+  const specificCategoryMatches = specificAbstractTokens(categoryMatches);
+  const specificAreaMatches = specificAbstractTokens(areaMatches);
   const specificTerms = mergeTokenLists(specificTitleMatches, specificCategoryMatches, specificAreaMatches);
   const matchedFieldCount = [titleMatches, categoryMatches, areaMatches].filter((matches) => matches.length).length;
 
@@ -499,21 +503,22 @@ function abstractMatchSummary(record, query) {
   const fieldCoverageScore = Math.max(0, matchedFieldCount - 1) * ABSTRACT_FIELD_COVERAGE_BONUS;
   const score = titleScore + categoryScore + areaScore + detailScore + fieldCoverageScore;
 
-  const titlePotential = Math.round(weightedAbstractTokenSum(record.abstract_title_tokens) * ABSTRACT_TITLE_WEIGHT);
-  const categoryPotential = Math.round(weightedAbstractTokenSum(record.category_tokens) * ABSTRACT_CATEGORY_WEIGHT);
-  const areaPotential = Math.round(weightedAbstractTokenSum(record.area_tokens) * ABSTRACT_AREA_WEIGHT);
-  const detailPotential = mergeTokenLists(
+  const queryRelevantTokens = specificAbstractTokens(query.tokens).filter((token) => abstractTokenDocumentCounts.has(token));
+  const queryRelevantWeight = weightedAbstractTokenSum(queryRelevantTokens);
+  const journalSpecificTokens = mergeTokenLists(
     record.abstract_title_tokens,
     record.abstract_category_specific_tokens,
     record.abstract_area_specific_tokens
-  ).length * ABSTRACT_DETAIL_BONUS;
-  const fieldPotential = Math.max(
+  );
+  const journalSpecificWeight = weightedAbstractTokenSum(journalSpecificTokens);
+  const matchedSpecificTerms = specificTerms.length ? specificTerms : matchedTerms;
+  const matchedSpecificWeight = weightedAbstractTokenSum(matchedSpecificTerms);
+  const precision = journalSpecificWeight ? matchedSpecificWeight / journalSpecificWeight : 0;
+  const recall = queryRelevantWeight ? matchedSpecificWeight / queryRelevantWeight : 0;
+  const fitPercentage = Math.max(
     0,
-    [record.abstract_title_tokens.length > 0, record.category_tokens.length > 0, record.area_tokens.length > 0]
-      .filter(Boolean)
-      .length - 1
-  ) * ABSTRACT_FIELD_COVERAGE_BONUS;
-  const maxScore = titlePotential + categoryPotential + areaPotential + detailPotential + fieldPotential;
+    Math.min(100, Math.round(((precision * 0.7) + (recall * 0.3)) * 100 + (Math.max(0, matchedFieldCount - 1) * 5)))
+  );
 
   const fields = [];
   if (titleMatches.length) fields.push("Title");
@@ -522,7 +527,7 @@ function abstractMatchSummary(record, query) {
 
   return {
     score,
-    fitPercentage: maxScore ? Math.max(0, Math.min(100, Math.round((score / maxScore) * 100))) : 0,
+    fitPercentage,
     terms: (specificTerms.length ? specificTerms : matchedTerms).slice(0, 8),
     fields,
   };
