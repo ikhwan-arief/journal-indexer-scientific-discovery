@@ -25,6 +25,7 @@ except ImportError as error:
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DOCS_DIR = REPO_ROOT / "docs"
 MANIFEST_PATH = DOCS_DIR / "data" / "search-manifest.json"
+LONG_ABSTRACT_FIT_QUERY = " ".join([f"syntheticterm{i:03d}" for i in range(1, 501)] + ["public", "health"])
 
 
 class QuietRequestHandler(SimpleHTTPRequestHandler):
@@ -272,6 +273,19 @@ def main() -> int:
         if not first_title.strip():
             raise AssertionError("Expected abstract search to render at least one result title.")
 
+        long_fit_page = browser.new_page()
+        long_fit_page.goto(f"{base_url}/search/", wait_until="networkidle")
+        long_fit_page.wait_for_selector("#search-form")
+        submit_search(long_fit_page, LONG_ABSTRACT_FIT_QUERY, scope="abstract")
+        long_fit_page.wait_for_selector(".match-insight strong", timeout=20000)
+        top_fit_labels = [text.strip() for text in long_fit_page.locator(".match-insight strong").all_inner_texts()[:5]]
+        if not top_fit_labels:
+            raise AssertionError("Expected long abstract search to render fit labels.")
+        if any(label == "Abstract fit: 0%" for label in top_fit_labels):
+            raise AssertionError(
+                f"Expected long abstract top matches to avoid 0% fit labels, got: {top_fit_labels}"
+            )
+
         profile_href = filter_page.locator(".search-card h3 a").first.get_attribute("href")
         if not profile_href or "journal/?sourceid=" not in profile_href:
             raise AssertionError(f"Expected dynamic journal profile link, got: {profile_href}")
@@ -295,7 +309,7 @@ def main() -> int:
         browser.close()
 
     print(
-        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, metric-based sorting ordered cancer results by descending SJR, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
+        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, metric-based sorting ordered cancer results by descending SJR, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, long abstract top matches avoided 0% fit labels, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
     )
     print(f"Prefix 'a' shards: {sorted(expected_a)}")
     print(f"Prefix 'j' shards: {sorted(expected_j)}")

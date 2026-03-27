@@ -52,6 +52,25 @@ const INDONESIAN_SUFFIX_RULES = [
   { suffix: "an", minLength: 5 },
 ];
 
+const ABSTRACT_TITLE_WEIGHT = 10;
+const ABSTRACT_CATEGORY_WEIGHT = 42;
+const ABSTRACT_AREA_WEIGHT = 30;
+const ABSTRACT_DETAIL_BONUS = 12;
+const ABSTRACT_FIELD_COVERAGE_BONUS = 8;
+const ABSTRACT_LOW_SIGNAL_TOKEN_WEIGHT = 0.25;
+const ABSTRACT_TOKEN_SIGNAL_REFERENCE = 60;
+const ABSTRACT_TOKEN_SIGNAL_MIN = 0.6;
+const ABSTRACT_TOKEN_SIGNAL_MAX = 1.8;
+const ABSTRACT_LOW_SIGNAL_TERMS = [
+  "study", "work", "research", "result", "method", "analysis", "data", "model", "system", "approach",
+  "performance", "program", "strategy", "design", "evaluation", "practice", "management", "policy",
+  "development", "science", "engineering", "health", "public", "clinical", "care", "knowledge",
+  "communication", "process", "review"
+];
+
+let abstractTokenDocumentCounts = new Map();
+let abstractTokenDocumentCountKey = "";
+
 function normalizeText(value) {
   return (value || "")
     .toLowerCase()
@@ -112,6 +131,8 @@ function stemToken(token) {
 
   return current.length >= 3 ? current : token;
 }
+
+const ABSTRACT_LOW_SIGNAL_TOKENS = new Set(ABSTRACT_LOW_SIGNAL_TERMS.map((token) => stemToken(token)));
 
 function tokenizeSearchText(value, options = {}) {
   const { removeStopWords = true, minLength = 3, applyStemming = true } = options;
@@ -181,6 +202,50 @@ function tokenMatches(tokenSet, tokens) {
 
 function tokenScore(tokenSet, tokens, weight) {
   return tokenMatches(tokenSet, tokens).length * weight;
+}
+
+function buildAbstractTokenSignals(records) {
+  const nextKey = String(records.length);
+  if (abstractTokenDocumentCountKey === nextKey) {
+    return;
+  }
+
+  const counts = new Map();
+  for (const record of records) {
+    const uniqueRecordTokens = new Set([
+      ...(record.title_tokens || []),
+      ...(record.category_tokens || []),
+      ...(record.area_tokens || []),
+    ]);
+    for (const token of uniqueRecordTokens) {
+      counts.set(token, (counts.get(token) || 0) + 1);
+    }
+  }
+
+  abstractTokenDocumentCounts = counts;
+  abstractTokenDocumentCountKey = nextKey;
+}
+
+function abstractTokenSignal(token) {
+  if (!token) {
+    return ABSTRACT_TOKEN_SIGNAL_MIN;
+  }
+  if (ABSTRACT_LOW_SIGNAL_TOKENS.has(token)) {
+    return ABSTRACT_LOW_SIGNAL_TOKEN_WEIGHT;
+  }
+  const count = abstractTokenDocumentCounts.get(token) || ABSTRACT_TOKEN_SIGNAL_REFERENCE;
+  return Math.max(
+    ABSTRACT_TOKEN_SIGNAL_MIN,
+    Math.min(ABSTRACT_TOKEN_SIGNAL_MAX, Math.sqrt(ABSTRACT_TOKEN_SIGNAL_REFERENCE / count))
+  );
+}
+
+function weightedAbstractTokenSum(tokens) {
+  let total = 0;
+  for (const token of tokens || []) {
+    total += abstractTokenSignal(token);
+  }
+  return total;
 }
 
 function joinRelative(siteRoot, relativePath) {
@@ -329,6 +394,9 @@ function prepareRecords(records) {
     record.area_tokens = tokenizeSearchText(record.areas || "");
     record.index_tokens = tokenizeSearchText(record.index_summary);
     record.issn_tokens = tokenizeSearchText((record.issns || []).join(" "), { removeStopWords: false, applyStemming: false });
+    record.abstract_title_tokens = record.title_tokens.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
+    record.abstract_category_specific_tokens = record.category_tokens.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
+    record.abstract_area_specific_tokens = record.area_tokens.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
     record.topic_tokens = mergeTokenLists(record.category_tokens, record.area_tokens);
     record.search_tokens = mergeTokenLists(
       record.title_tokens,
@@ -405,47 +473,63 @@ function matchScopeTokenSet(record, scope) {
   return record.search_token_set || new Set();
 }
 
-function abstractScore(record, query) {
+function abstractMatchSummary(record, query) {
   if (!query.hasMeaningfulTokens) {
-    return 0;
+    return null;
   }
 
+  const titleMatches = tokenMatches(record.title_token_set, query.tokens);
   const categoryMatches = tokenMatches(record.category_token_set, query.tokens);
   const areaMatches = tokenMatches(record.area_token_set, query.tokens);
-  const matchedTerms = mergeTokenLists(categoryMatches, areaMatches);
-  if (!matchedTerms.length) {
-    return 0;
-  }
-
-  let score = 0;
-  score += categoryMatches.length * 26;
-  score += areaMatches.length * 18;
-  score += Math.round((matchedTerms.length / query.tokens.length) * 90);
-  score += literalMatchScore(record.topic_text, query.normalized) > 0 ? 12 : 0;
-  return score;
-}
-
-function abstractInsight(record, query) {
-  if (!query.hasMeaningfulTokens) {
-    return null;
-  }
-
-  const matchedInCategories = tokenMatches(record.category_token_set, query.tokens);
-  const matchedInAreas = tokenMatches(record.area_token_set, query.tokens);
-  const matchedTerms = mergeTokenLists(matchedInCategories, matchedInAreas);
-
+  const matchedTerms = mergeTokenLists(titleMatches, categoryMatches, areaMatches);
   if (!matchedTerms.length) {
     return null;
   }
+
+  const specificTitleMatches = titleMatches.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
+  const specificCategoryMatches = categoryMatches.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
+  const specificAreaMatches = areaMatches.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
+  const specificTerms = mergeTokenLists(specificTitleMatches, specificCategoryMatches, specificAreaMatches);
+  const matchedFieldCount = [titleMatches, categoryMatches, areaMatches].filter((matches) => matches.length).length;
+
+  const titleScore = Math.round(weightedAbstractTokenSum(specificTitleMatches) * ABSTRACT_TITLE_WEIGHT);
+  const categoryScore = Math.round(weightedAbstractTokenSum(categoryMatches) * ABSTRACT_CATEGORY_WEIGHT);
+  const areaScore = Math.round(weightedAbstractTokenSum(areaMatches) * ABSTRACT_AREA_WEIGHT);
+  const detailScore = specificTerms.length * ABSTRACT_DETAIL_BONUS;
+  const fieldCoverageScore = Math.max(0, matchedFieldCount - 1) * ABSTRACT_FIELD_COVERAGE_BONUS;
+  const score = titleScore + categoryScore + areaScore + detailScore + fieldCoverageScore;
+
+  const titlePotential = Math.round(weightedAbstractTokenSum(record.abstract_title_tokens) * ABSTRACT_TITLE_WEIGHT);
+  const categoryPotential = Math.round(weightedAbstractTokenSum(record.category_tokens) * ABSTRACT_CATEGORY_WEIGHT);
+  const areaPotential = Math.round(weightedAbstractTokenSum(record.area_tokens) * ABSTRACT_AREA_WEIGHT);
+  const detailPotential = mergeTokenLists(
+    record.abstract_title_tokens,
+    record.abstract_category_specific_tokens,
+    record.abstract_area_specific_tokens
+  ).length * ABSTRACT_DETAIL_BONUS;
+  const fieldPotential = Math.max(
+    0,
+    [record.abstract_title_tokens.length > 0, record.category_tokens.length > 0, record.area_tokens.length > 0]
+      .filter(Boolean)
+      .length - 1
+  ) * ABSTRACT_FIELD_COVERAGE_BONUS;
+  const maxScore = titlePotential + categoryPotential + areaPotential + detailPotential + fieldPotential;
 
   const fields = [];
-  if (matchedInCategories.length) fields.push("Categories");
-  if (matchedInAreas.length) fields.push("Areas");
+  if (titleMatches.length) fields.push("Title");
+  if (categoryMatches.length) fields.push("Categories");
+  if (areaMatches.length) fields.push("Areas");
 
   return {
-    terms: matchedTerms.slice(0, 8),
+    score,
+    fitPercentage: maxScore ? Math.max(0, Math.min(100, Math.round((score / maxScore) * 100))) : 0,
+    terms: (specificTerms.length ? specificTerms : matchedTerms).slice(0, 8),
     fields,
   };
+}
+
+function abstractScore(record, query) {
+  return abstractMatchSummary(record, query)?.score || 0;
 }
 
 function allScopeScore(record, query) {
@@ -513,17 +597,6 @@ function scoreRecord(record, query, scope) {
   return preciseScopeScore(record, query, scope);
 }
 
-function abstractFitPercentage(score, query) {
-  if (!query?.tokens?.length) {
-    return 0;
-  }
-  const maxScore = (query.tokens.length * 44) + 90;
-  if (!maxScore) {
-    return 0;
-  }
-  return Math.max(0, Math.min(100, Math.round((score / maxScore) * 100)));
-}
-
 function createInsightBox(insight, fitPercentage) {
   const wrapper = document.createElement("div");
   wrapper.className = "match-insight";
@@ -538,7 +611,7 @@ function createInsightBox(insight, fitPercentage) {
   wrapper.appendChild(description);
 
   const guidance = document.createElement("span");
-  guidance.textContent = "100% means the meaningful abstract terms align very strongly with this journal's Categories and Areas for the current search. Around 56% means moderate overlap: several terms match well, but the topic fit is still partial. Compare this percentage within the current search only; it is not a journal quality metric.";
+  guidance.textContent = "100% means the abstract aligns very strongly with this journal's Title, Categories, and Areas. Generic method words count less than specific topic terms. Compare this percentage within the current search only; it is not a journal quality metric.";
   wrapper.appendChild(guidance);
 
   return wrapper;
@@ -941,6 +1014,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
 
   function mergeLoadedRecords() {
     records = Array.from(loadedChunkMap.values()).flat();
+    buildAbstractTokenSignals(records);
     return records;
   }
 
@@ -1083,13 +1157,20 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
       if (state.quartileFilter !== "all" && record.sjr_best_quartile !== state.quartileFilter) continue;
       if (state.countryFilter !== "all" && record.country !== state.countryFilter) continue;
 
-      const score = useQuery ? scoreRecord(record, state.query, state.scope) : 1;
+      const abstractSummary = useQuery && state.scope === "abstract"
+        ? abstractMatchSummary(record, state.query)
+        : null;
+      const score = useQuery
+        ? (state.scope === "abstract" ? abstractSummary?.score || 0 : scoreRecord(record, state.query, state.scope))
+        : 1;
       if (!useQuery || score > 0) {
-        matched.push({ score, record });
+        matched.push({ score, record, abstractSummary });
       }
     }
 
     matched.sort((left, right) => {
+      if (useQuery && state.scope === "abstract" && right.score !== left.score) return right.score - left.score;
+
       const leftMetric = journalMetricValue(left.record);
       const rightMetric = journalMetricValue(right.record);
       if (rightMetric !== leftMetric) return rightMetric - leftMetric;
@@ -1098,7 +1179,6 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
       const rightHIndex = journalHIndexValue(right.record);
       if (rightHIndex !== leftHIndex) return rightHIndex - leftHIndex;
 
-      if (right.score !== left.score) return right.score - left.score;
       const quartileGap = quartilePriority(right.record.sjr_best_quartile) - quartilePriority(left.record.sjr_best_quartile);
       if (quartileGap !== 0) return quartileGap;
       if (left.record.rank !== right.record.rank) return left.record.rank - right.record.rank;
@@ -1153,7 +1233,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
     }
 
     for (const entry of pageItems) {
-      const { record, score } = entry;
+      const { record, abstractSummary } = entry;
       const article = document.createElement("article");
       article.className = "search-card";
 
@@ -1192,11 +1272,8 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
       side.appendChild(buildDetailItem("Best SJR Quartile", record.sjr_best_quartile));
       side.appendChild(buildDetailItem("Author Holds Copyright", record.author_holds_copyright));
       side.appendChild(buildDetailItem("ISSN", (record.issns || []).join(", ")));
-      if (state.scope === "abstract") {
-        const insight = abstractInsight(record, state.query);
-        if (insight) {
-          side.appendChild(createInsightBox(insight, abstractFitPercentage(score, state.query)));
-        }
+      if (state.scope === "abstract" && abstractSummary) {
+        side.appendChild(createInsightBox(abstractSummary, abstractSummary.fitPercentage));
       }
       layout.appendChild(side);
 
