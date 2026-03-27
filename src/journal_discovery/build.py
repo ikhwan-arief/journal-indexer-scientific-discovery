@@ -660,6 +660,13 @@ def home_page_html(summary: SiteSummary) -> str:
                   <span>Paste article abstract</span>
                   <textarea id=\"q\" name=\"q\" rows=\"6\" placeholder=\"Paste an article abstract. The app compares it with journal titles, categories, and subject areas to suggest relevant journals.\"></textarea>
                 </label>
+                <div class=\"field hero-sort-field\">
+                  <label for=\"sort-order\">Sort results</label>
+                  <select id=\"sort-order\" name=\"sort\">
+                    <option value=\"default\">Default ranking</option>
+                    <option value=\"fit_desc\">Highest abstract fit</option>
+                  </select>
+                </div>
                 <div class=\"hero-actions-inline\">
                   <button type=\"submit\" class=\"button button-primary\">Find matching journals</button>
                   <a class=\"button button-secondary\" href=\"search/\">Open advanced search</a>
@@ -745,7 +752,7 @@ def search_page_html(summary: SiteSummary) -> str:
             <div>
               <p class=\"eyebrow results-eyebrow\">ADVANCED SEARCH</p>
               <h2>Search journal profiles</h2>
-              <p class=\"table-note\">Search by abstract, keyword, title, publisher, URL fragment, indexing status, best quartile, or country.</p>
+              <p class=\"table-note\">Search by abstract, keyword, title, publisher, URL fragment, indexing status, best quartile, or country. Abstract searches can also be sorted by the displayed fit percentage.</p>
             </div>
             <div class=\"table-chip\" id=\"results-summary\">{total_profiles} journal profiles ready</div>
           </div>
@@ -789,6 +796,13 @@ def search_page_html(summary: SiteSummary) -> str:
                   <label for=\"country-filter\">Country</label>
                   <select id=\"country-filter\" name=\"country\">
                     <option value=\"all\">All countries</option>
+                  </select>
+                </div>
+                <div class=\"field\">
+                  <label for=\"sort-order\">Sort results</label>
+                  <select id=\"sort-order\" name=\"sort\">
+                    <option value=\"default\">Default ranking</option>
+                    <option value=\"fit_desc\">Highest abstract fit</option>
                   </select>
                 </div>
               </div>

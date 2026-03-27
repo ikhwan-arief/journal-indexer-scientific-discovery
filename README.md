@@ -13,7 +13,7 @@ Journal Discovery is a static journal discovery website designed for public host
 - Uses a search-first homepage: the result area stays empty on first load and only shows journal cards after a user submits a query.
 - Provides a large abstract input on the front page so users can paste an article abstract and search for matching journals inline.
 - Shows the `SJR Best Quartile` on a single runtime-loaded journal profile page keyed by stable `sourceid` values.
-- Exposes a search page for abstract, keyword, title, URL fragment, country, index filter, and quartile filter.
+- Exposes a search page for abstract, keyword, title, URL fragment, country, index filter, quartile filter, and abstract-fit result sorting.
 - Applies lightweight NLP preprocessing to abstract and keyword search: normalization, tokenization, stop-word removal (English + Indonesian), and conservative stemming.
 - Scores abstract matching from the journal `Title`, `Categories`, and `Areas` fields in `scimagojr.csv`, with generic abstract terms weighted below specific topical terms.
 - Shows `Categories` and `Areas` on the journal profile page and on the search result profile cards.

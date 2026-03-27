@@ -93,9 +93,18 @@ def wait_for_results(page) -> None:
     )
 
 
-def submit_search(page, query: str, scope: str | None = None) -> None:
+def submit_search(page, query: str, scope: str | None = None, sort: str | None = None) -> None:
     if scope is not None:
         page.select_option("#scope", scope)
+    if sort is not None and page.locator("#sort-order").count():
+        page.wait_for_function(
+            """() => {
+                const sortSelect = document.querySelector('#sort-order');
+                return Boolean(sortSelect) && !sortSelect.disabled;
+            }""",
+            timeout=5000,
+        )
+        page.select_option("#sort-order", sort)
     page.fill("#q", query)
     page.click('button[type="submit"]')
     wait_for_results(page)
@@ -158,6 +167,8 @@ def main() -> int:
             """() => document.querySelector('#results-section')?.hidden === false""",
             timeout=10000,
         )
+        if home_page.locator("#sort-order").count() != 1:
+            raise AssertionError("Expected homepage abstract form to expose a sort control.")
         home_request_set = wait_for_chunk_set(home_page, home_requests, expected_all)
         if home_request_set != expected_all:
             raise AssertionError(
@@ -279,7 +290,7 @@ def main() -> int:
         long_fit_page = browser.new_page()
         long_fit_page.goto(f"{base_url}/search/", wait_until="networkidle")
         long_fit_page.wait_for_selector("#search-form")
-        submit_search(long_fit_page, LONG_ABSTRACT_FIT_QUERY, scope="abstract")
+        submit_search(long_fit_page, LONG_ABSTRACT_FIT_QUERY, scope="abstract", sort="fit_desc")
         long_fit_page.wait_for_selector(".match-insight strong", timeout=20000)
         top_fit_labels = [text.strip() for text in long_fit_page.locator(".match-insight strong").all_inner_texts()[:5]]
         if not top_fit_labels:
@@ -293,6 +304,10 @@ def main() -> int:
         if max(top_fit_values) <= 2:
             raise AssertionError(
                 f"Expected long abstract top matches to exceed 2% fit, got labels: {top_fit_labels}"
+            )
+        if top_fit_values != sorted(top_fit_values, reverse=True):
+            raise AssertionError(
+                f"Expected fit-sorted abstract results to be ordered by descending fit percentage, got labels: {top_fit_labels}"
             )
 
         profile_href = filter_page.locator(".search-card h3 a").first.get_attribute("href")
@@ -318,7 +333,7 @@ def main() -> int:
         browser.close()
 
     print(
-        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, metric-based sorting ordered cancer results by descending SJR, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, long abstract top matches exceeded 2% fit labels, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
+        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, the homepage exposed abstract-fit sorting, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, metric-based sorting ordered cancer results by descending SJR, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, long abstract top matches exceeded 2% fit labels and respected descending fit sorting, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
     )
     print(f"Prefix 'a' shards: {sorted(expected_a)}")
     print(f"Prefix 'j' shards: {sorted(expected_j)}")

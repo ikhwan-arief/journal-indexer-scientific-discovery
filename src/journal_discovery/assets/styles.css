@@ -304,6 +304,11 @@ img {
   color: var(--muted);
 }
 
+.hero-sort-field {
+  margin-top: 1rem;
+  max-width: 20rem;
+}
+
 .button,
 button,
 select,
@@ -806,7 +811,7 @@ tbody tr:last-child td {
 
 .search-filter-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1rem;
 }
 

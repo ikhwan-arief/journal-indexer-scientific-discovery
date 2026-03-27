@@ -647,6 +647,29 @@ function createResultSummary(record) {
   return wrapper;
 }
 
+function normalizeSortOrder(value) {
+  return value === "fit_desc" ? "fit_desc" : "default";
+}
+
+function abstractFitValue(entry) {
+  return entry.abstractSummary?.fitPercentage || 0;
+}
+
+function compareMetricPriority(left, right) {
+  const leftMetric = journalMetricValue(left.record);
+  const rightMetric = journalMetricValue(right.record);
+  if (rightMetric !== leftMetric) return rightMetric - leftMetric;
+
+  const leftHIndex = journalHIndexValue(left.record);
+  const rightHIndex = journalHIndexValue(right.record);
+  if (rightHIndex !== leftHIndex) return rightHIndex - leftHIndex;
+
+  const quartileGap = quartilePriority(right.record.sjr_best_quartile) - quartilePriority(left.record.sjr_best_quartile);
+  if (quartileGap !== 0) return quartileGap;
+  if (left.record.rank !== right.record.rank) return left.record.rank - right.record.rank;
+  return left.record.title.localeCompare(right.record.title);
+}
+
 function createSearchActions(record, siteRoot) {
   const wrapper = document.createElement("div");
   wrapper.className = "search-card-actions";
@@ -945,6 +968,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
   const indexSelect = document.querySelector("#index-filter");
   const quartileSelect = document.querySelector("#quartile-filter");
   const countrySelect = document.querySelector("#country-filter");
+  const sortSelect = document.querySelector("#sort-order");
 
   if (!form || !results || !resultsCount || !queryInput || !scopeField) {
     return;
@@ -983,19 +1007,46 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
   if (indexSelect) indexSelect.value = params.get("index") || "all";
   if (quartileSelect) quartileSelect.value = params.get("quartile") || "all";
   if (countrySelect) countrySelect.value = params.get("country") || "all";
+  if (sortSelect) sortSelect.value = normalizeSortOrder(params.get("sort") || "default");
   page = Math.max(1, Number.parseInt(params.get("page") || "1", 10) || 1);
 
   function currentScope() {
     return scopeField.value || (pageMode === "home" ? "abstract" : "all");
   }
 
+  function syncSortControl(scope) {
+    if (!sortSelect) {
+      return;
+    }
+
+    const currentSort = normalizeSortOrder(sortSelect.value || "default");
+    const storedSort = normalizeSortOrder(sortSelect.dataset.abstractSort || currentSort);
+    if (scope === "abstract") {
+      sortSelect.disabled = false;
+      sortSelect.title = "";
+      sortSelect.value = currentSort === "default" ? storedSort : currentSort;
+      return;
+    }
+
+    sortSelect.dataset.abstractSort = currentSort;
+    sortSelect.disabled = true;
+    sortSelect.title = "Abstract fit sorting is available only for abstract scope.";
+    sortSelect.value = "default";
+  }
+
   function currentState() {
     const scope = currentScope();
+    syncSortControl(scope);
     const query = buildProcessedQuery(queryInput.value, scope);
     const indexFilter = indexSelect?.value || "all";
     const quartileFilter = quartileSelect?.value || "all";
     const countryFilter = countrySelect?.value || "all";
+    const sortOrder = normalizeSortOrder(sortSelect?.value || "default");
     const hasFilters = indexFilter !== "all" || quartileFilter !== "all" || countryFilter !== "all";
+
+    if (sortSelect && scope === "abstract") {
+      sortSelect.dataset.abstractSort = sortOrder;
+    }
 
     return {
       scope,
@@ -1003,6 +1054,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
       indexFilter,
       quartileFilter,
       countryFilter,
+      sortOrder,
       hasFilters,
       shouldLoad: hasFilters || query.shouldLoad,
       shouldShowPrompt: !hasFilters && !query.hasRawQuery,
@@ -1174,20 +1226,15 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
     }
 
     matched.sort((left, right) => {
-      if (useQuery && state.scope === "abstract" && right.score !== left.score) return right.score - left.score;
+      if (useQuery && state.scope === "abstract") {
+        if (state.sortOrder === "fit_desc") {
+          const fitGap = abstractFitValue(right) - abstractFitValue(left);
+          if (fitGap !== 0) return fitGap;
+        }
+        if (right.score !== left.score) return right.score - left.score;
+      }
 
-      const leftMetric = journalMetricValue(left.record);
-      const rightMetric = journalMetricValue(right.record);
-      if (rightMetric !== leftMetric) return rightMetric - leftMetric;
-
-      const leftHIndex = journalHIndexValue(left.record);
-      const rightHIndex = journalHIndexValue(right.record);
-      if (rightHIndex !== leftHIndex) return rightHIndex - leftHIndex;
-
-      const quartileGap = quartilePriority(right.record.sjr_best_quartile) - quartilePriority(left.record.sjr_best_quartile);
-      if (quartileGap !== 0) return quartileGap;
-      if (left.record.rank !== right.record.rank) return left.record.rank - right.record.rank;
-      return left.record.title.localeCompare(right.record.title);
+      return compareMetricPriority(left, right);
     });
     return matched;
   }
@@ -1201,6 +1248,9 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
     }
     if (rawQuery && state.scope !== (pageMode === "home" ? "abstract" : "all")) {
       nextParams.set("scope", state.scope);
+    }
+    if (rawQuery && state.scope === "abstract" && state.sortOrder !== "default") {
+      nextParams.set("sort", state.sortOrder);
     }
     if (pageMode === "search") {
       if (state.indexFilter !== "all") nextParams.set("index", state.indexFilter);
@@ -1333,7 +1383,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
     });
   });
 
-  for (const element of [scopeField, indexSelect, quartileSelect, countrySelect].filter(Boolean)) {
+  for (const element of [scopeField, indexSelect, quartileSelect, countrySelect, sortSelect].filter(Boolean)) {
     element.addEventListener("change", () => {
       page = 1;
       loadAndRenderPage().catch((error) => {
