@@ -1,4 +1,4 @@
-# Field-Aware Abstract-to-Journal Recommendation Under Sparse Metadata: An Interpretable Static Retrieval Approach
+# Interpretable Field-Aware Retrieval for Abstract-to-Journal Recommendation with Sparse Metadata
 
 ## Abstract
 
