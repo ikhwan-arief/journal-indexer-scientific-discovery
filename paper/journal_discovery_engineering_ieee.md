@@ -1,4 +1,4 @@
-# Abstract-Based Journal Discovery Under Sparse Metadata
+# Field-Aware Abstract-to-Journal Recommendation Under Sparse Metadata: An Interpretable Static Retrieval Approach
 
 ## Abstract
 
