@@ -82,6 +82,13 @@ Use `--refs-dir /path/to/refs` when your dissertation PDF folder lives elsewhere
 
 Use `./.venv/bin/python scripts/benchmark_doaj_relevance.py` to run a DOAJ-based relevance benchmark that samples recent article abstracts across several broad domains without storing an API key in the repository. This benchmark reports relevance-oriented metrics such as `Hit@5`, `MRR`, and `nDCG@10`, and keeps exact source-journal retrieval as a secondary signal only.
 
+Use `./.venv/bin/python scripts/benchmark_sparse_baselines.py --max-rank 30` to compare two fair lexical baselines on the same sparse journal metadata fields:
+
+- `BM25F` over `Title`, `Categories`, and `Areas`
+- `TF-IDF` cosine over the same fields
+
+Use `./.venv/bin/python scripts/export_manual_relevance_template.py --output paper/manual_relevance_benchmark_template.csv` to export a manual-label template that merges candidate journals proposed by the current app, `BM25F`, and `TF-IDF`. The rubric for turning that CSV into a graded-relevance benchmark is documented in `paper/manual_relevance_protocol.md`.
+
 ## Generated data validation
 
 Use the generated data validator to confirm that `home.json`, `search-manifest.json`, and all sharded search payloads are structurally consistent before opening a browser.
