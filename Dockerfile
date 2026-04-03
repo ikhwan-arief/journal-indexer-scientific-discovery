@@ -28,3 +28,4 @@ EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD /bin/sh -c 'wget -qO- "http://127.0.0.1:${PORT}/healthz" >/dev/null || exit 1'
+

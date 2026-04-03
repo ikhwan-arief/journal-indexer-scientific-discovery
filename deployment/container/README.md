@@ -24,10 +24,12 @@ Recommended production flow:
 
 ## Files included in this folder
 
-- `Dockerfile`: multi-stage image that builds the site and serves it with Nginx
+- `Dockerfile`: deployment-local multi-stage image that builds the site and serves it with Nginx
 - `nginx.conf`: minimal static-site Nginx config with a health endpoint
 - `docker-compose.yml.example`: ready-to-edit Compose example for a single-server deployment
 - `.env.example`: template for the deployment-specific values used by Docker Compose
+
+At the repository root there is also a top-level `Dockerfile` so the project can be built directly by container platforms that expect `docker build .` from the repo root.
 
 ## Prerequisites
 
@@ -35,10 +37,12 @@ Before building the container on the server, make sure:
 
 1. Docker Engine is installed.
 1. Docker Compose is available via `docker compose`.
-1. The required CSV files already exist in `data/raw/`: `scimagojr.csv` and `scimagojr_wos.csv`.
+1. The required CSV files already exist in `data/raw/`: `scimagojr.csv`, `scimagojr_wos.csv`, and `sinta.csv`.
 1. The optional DOAJ file exists if you want DOAJ enrichment: `doaj.csv`.
 
 If `doaj.csv` is missing, the site still builds, but DOAJ-derived website, APC, and license enrichment will be reduced.
+
+If `sinta.csv` is missing, the build should be treated as invalid because SINTA is now part of the required source snapshot.
 
 ## Recommended server layout
 
@@ -77,7 +81,6 @@ Run this from the repository root:
 
 ```bash
 docker build \
-  -f deployment/container/Dockerfile \
   --build-arg SITE_URL=https://journals.example.com \
   -t journal-discovery:latest \
   .
@@ -88,6 +91,17 @@ Notes:
 - Replace `https://journals.example.com` with the real public URL.
 - `SITE_URL` is optional, but recommended because the generator uses it for canonical tags and `sitemap.xml`.
 - The build uses the current CSV files from `data/raw/` inside the repository.
+- This root `Dockerfile` is the recommended default for generic container hosts that build the repository as-is.
+
+If you explicitly want to build from the deployment subfolder variant, this also works:
+
+```bash
+docker build \
+  -f deployment/container/Dockerfile \
+  --build-arg SITE_URL=https://journals.example.com \
+  -t journal-discovery:latest \
+  .
+```
 
 If you are deploying on a small VM and want to confirm the build output before starting the runtime container, inspect the image metadata and recent build logs:
 
@@ -102,7 +116,8 @@ docker history journal-discovery:latest
 docker run -d \
   --name journal-discovery \
   --restart unless-stopped \
-  -p 8080:80 \
+  -e PORT=8080 \
+  -p 8080:8080 \
   journal-discovery:latest
 ```
 
@@ -110,7 +125,9 @@ This publishes the site on port `8080` of the server.
 
 If you already have a reverse proxy on the server, point it to `http://127.0.0.1:8080`.
 
-If you do not use a reverse proxy yet, you can temporarily expose the site directly on a public port like `80:80`, but that is not recommended for long-term production use because TLS termination and routing are harder to manage.
+If you do not use a reverse proxy yet, you can temporarily expose the site directly on a public port like `80:8080`, but that is not recommended for long-term production use because TLS termination and routing are harder to manage.
+
+The runtime container respects the `PORT` environment variable, which makes it compatible with container platforms that inject a port dynamically.
 
 ### 3. Verify the container
 
@@ -147,6 +164,7 @@ Update at least these values in `.env`:
 
 - `SITE_URL`
 - `HOST_PORT` if you do not want `8080`
+- `CONTAINER_PORT` if the runtime port should differ from `8080`
 - `IMAGE_NAME` if you want versioned tags
 - `CONTAINER_NAME` if needed
 
@@ -157,6 +175,7 @@ SITE_URL=https://journals.example.com
 IMAGE_NAME=journal-discovery:2026-03-15
 CONTAINER_NAME=journal-discovery
 HOST_PORT=8080
+CONTAINER_PORT=8080
 ```
 
 ### 3. Start the service
@@ -196,7 +215,7 @@ For production, the clean setup is usually:
 Example public flow:
 
 - browser -> `https://journals.example.com`
-- reverse proxy -> `http://journal-discovery:80`
+- reverse proxy -> `http://journal-discovery:8080`
 
 If your reverse proxy is on the same host and not inside Docker, forwarding to `http://127.0.0.1:8080` is enough.
 
@@ -231,7 +250,6 @@ Example with plain Docker:
 
 ```bash
 docker build \
-  -f deployment/container/Dockerfile \
   --build-arg SITE_URL=https://journals.example.com \
   -t journal-discovery:latest \
   .
@@ -242,7 +260,8 @@ docker rm journal-discovery
 docker run -d \
   --name journal-discovery \
   --restart unless-stopped \
-  -p 8080:80 \
+  -e PORT=8080 \
+  -p 8080:8080 \
   journal-discovery:latest
 ```
 
@@ -262,11 +281,23 @@ Example:
 
 ```bash
 docker build \
-  -f deployment/container/Dockerfile \
   --build-arg SITE_URL=https://journals.example.com \
   -t journal-discovery:2026-03-15 \
   .
 ```
+
+## Generic container hosts
+
+The top-level `Dockerfile` is intended to make this repository portable to platforms that create one container instance directly from the repository, such as managed container services or PaaS builders.
+
+Typical expectations supported by this image:
+
+- `docker build .` works from the repository root
+- the runtime listens on `PORT`
+- `/healthz` returns `200 ok`
+- no runtime Python process is required
+
+If your platform injects a port automatically, you usually only need to point it at the repository and let it build the default `Dockerfile`.
 
 If a deployment is bad, restart the server with the previous working tag.
 

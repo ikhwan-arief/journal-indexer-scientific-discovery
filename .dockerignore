@@ -1,10 +1,11 @@
 .git
 .github
-build
-docs
+.venv
 __pycache__
 *.pyc
-*.pyo
-*.pyd
-*.log
+build
+docs
+paper
+references
 deployment/container/docker-compose.yml
+deployment/container/.env
