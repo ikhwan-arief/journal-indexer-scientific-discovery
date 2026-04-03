@@ -7,29 +7,31 @@ Journal Discovery is a static journal discovery website designed for public host
 - Uses Python during the build step only.
 - Reads the active Scimago Journal Rank snapshot from `data/raw/scimagojr.csv`.
 - Reads the active WoS subset from `data/raw/scimagojr_wos.csv`.
+- Reads the active SINTA snapshot from `data/raw/sinta.csv`.
 - Optionally reads DOAJ enrichment from `data/raw/doaj.csv`.
 - Generates a public static site into `docs/`.
 - Writes a lightweight `docs/data/home.json` for homepage metadata plus a `docs/data/search-manifest.json`, `docs/data/profile-index.json`, and sharded `docs/data/search-chunks/` files for on-demand search and profile loading, with title-prefix shard hints so title searches can fetch fewer chunks first.
 - Uses a search-first homepage: the result area stays empty on first load and only shows journal cards after a user submits a query.
 - Provides a large abstract input on the front page so users can paste an article abstract and search for matching journals inline.
 - Shows the `SJR Best Quartile` on a single runtime-loaded journal profile page keyed by stable `sourceid` values.
-- Exposes a search page for abstract, keyword, title, URL fragment, country, index filter, quartile filter, and abstract-fit result sorting.
+- Exposes a search page for abstract, keyword, title, URL fragment, country, index filter, accreditation filter, quartile filter, and abstract-fit result sorting.
 - Applies lightweight NLP preprocessing to abstract and keyword search: normalization, tokenization, stop-word removal (English + Indonesian), and conservative stemming.
-- Scores abstract matching from the journal `Title`, `Categories`, and `Areas` fields in `scimagojr.csv`, with generic abstract terms weighted below specific topical terms plus phrase-aware matching and conservative acronym/synonym expansion for recurring SME, AI, and digital-transformation concepts.
-- Shows `Categories` and `Areas` on the journal profile page and on the search result profile cards.
+- Scores abstract matching from the journal `Title`, `Categories`, `Areas`, and `Subject Area` fields when available, with generic abstract terms weighted below specific topical terms plus phrase-aware matching and conservative acronym/synonym expansion for recurring SME, AI, and digital-transformation concepts.
+- Shows `Categories`, `Areas`, and `SINTA Subject Area` when available on journal profile pages and search result profile cards.
+- Uses SINTA only for non-metric metadata such as accreditation, subject area, affiliation, and profile links. SINTA numeric metrics and Garuda flags are intentionally not exposed to users.
 - Fills journal website, APC status, license, and copyright fields from DOAJ when a journal matches by ISSN or unique exact title.
 
 ## Profile page model
 
 - Journal detail pages are no longer generated as one folder per journal under `docs/journals/`.
 - The app now serves a single profile page at `docs/journal/index.html`.
-- Journal links use the stable Scimago `Sourceid` as the runtime identifier, for example `journal/?sourceid=12345`.
+- Journal links use a stable runtime identifier. Scimago-backed records keep the Scimago `Sourceid`, for example `journal/?sourceid=12345`, while SINTA-only records use `journal/?sourceid=sinta-<profile_id>`.
 - When the raw Scimago snapshot is replaced and rebuilt, the profile page continues to resolve records from the latest generated dataset without requiring per-journal page generation.
 - Existing legacy links of the form `journals/<slug>/` are redirected through `docs/404.html` to the new runtime profile URL on GitHub Pages.
 
 ## Safe dataset refresh
 
-- Use `python scripts/update_source_data.py --scimago /path/to/scimagojr.csv --wos /path/to/scimagojr_wos.csv` to replace the active raw datasets, rebuild the site, validate the output, and run the browser smoke test in one command.
+- Use `python scripts/update_source_data.py --scimago /path/to/scimagojr.csv --wos /path/to/scimagojr_wos.csv --sinta /path/to/sinta.csv` to replace the active raw datasets, rebuild the site, validate the output, and run the browser smoke test in one command.
 - Add `--doaj /path/to/doaj.csv` when you also want to replace the enrichment snapshot in the same run.
 - The script backs up the current raw data first and restores it automatically if build, validation, or smoke testing fails.
 - The GitHub Pages workflow now uses the same guarded script, so local refreshes and CI refreshes follow one orchestration path.
@@ -38,8 +40,9 @@ Journal Discovery is a static journal discovery website designed for public host
 
 - Scimago data does not include the public journal website URL.
 - Scimago data does not include APC, license, or author copyright information.
+- SINTA data is used only for accreditation and descriptive metadata, not for user-facing numeric quality metrics.
 - Those fields remain `Tidak tersedia` when the current DOAJ snapshot has no matching record.
-- For now, title links fall back to the internal journal profile page when no external journal website exists in the dataset.
+- Journal website priority is DOAJ first, then SINTA website, then the internal journal profile page when no external website exists in the dataset.
 
 ## Build locally
 
@@ -72,7 +75,7 @@ python scripts/build_site.py
 
 ## Browser smoke test
 
-Use the smoke test to verify that the homepage stays idle on first load, homepage search renders results only after submit, stop-word-only homepage queries stay idle, the advanced search page stays idle on first load, scope-only changes do not trigger shard loading, title-scoped queries only fetch the expected shard files, deep-linked filters load correctly, and abstract searches render match insight cards.
+Use the smoke test to verify that the homepage stays idle on first load, homepage search renders results only after submit, stop-word-only homepage queries stay idle, the advanced search page stays idle on first load, scope-only changes do not trigger shard loading, title-scoped queries only fetch the expected shard files, deep-linked index and accreditation filters load correctly, merged Indonesia records show accreditation badges, SINTA-only profiles resolve correctly, and abstract searches render match insight cards.
 
 ## Local benchmark
 
@@ -97,7 +100,7 @@ Use the generated data validator to confirm that `home.json`, `search-manifest.j
 python scripts/validate_generated_data.py
 ```
 
-The validator checks that the lightweight homepage metadata matches the generated search summary, every manifest shard exists, every profile index entry points to the correct chunk, title-prefix chunk mappings stay consistent with the records inside each shard, and the manifest country list matches the generated search dataset.
+The validator checks that the lightweight homepage metadata matches the generated search summary, every manifest shard exists, every profile index entry points to the correct chunk, title-prefix chunk mappings stay consistent with the records inside each shard, the manifest country list matches the generated search dataset, `scopus_indexed` stays explicit, SINTA source IDs use the `sinta-...` format, and forbidden SINTA metric fields are not exposed publicly.
 
 1. Install the browser test dependency:
 
@@ -117,7 +120,7 @@ python -m playwright install chromium
 python scripts/smoke_test_search_loading.py
 ```
 
-The script serves `docs/` locally in a headless browser, confirms that the homepage does not render default journal results on idle load, confirms that homepage abstract submit renders result cards, confirms that stop-word-only homepage queries do not fetch shards, confirms that changing only the advanced-search scope still does not fetch shards, checks that title searches only fetch the shard files listed in `docs/data/search-manifest.json` for the relevant title prefix, verifies that a deep-linked filter state loads the full shard set, confirms that an abstract-scoped search renders the match insight UI, and verifies that a journal profile link resolves through the single dynamic profile page.
+The script serves `docs/` locally in a headless browser, confirms that the homepage does not render default journal results on idle load, confirms that homepage abstract submit renders result cards, confirms that stop-word-only homepage queries do not fetch shards, confirms that changing only the advanced-search scope still does not fetch shards, checks that title searches only fetch the shard files listed in `docs/data/search-manifest.json` for the relevant title prefix, verifies that deep-linked index and accreditation filters load the full shard set, confirms that merged Indonesia results show accreditation badges, confirms that abstract-scoped search renders the match insight UI, verifies that merged Indonesia and SINTA-only profiles expose the expected non-metric status details, and verifies that a journal profile link resolves through the single dynamic profile page.
 
 ## Deployment
 

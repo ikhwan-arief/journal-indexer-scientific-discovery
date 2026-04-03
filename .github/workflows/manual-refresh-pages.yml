@@ -55,7 +55,7 @@ jobs:
           SITE_URL: ${{ vars.SITE_URL }}
         run: |
           set -euo pipefail
-          cmd=(python scripts/update_source_data.py --scimago data/raw/scimagojr.csv --wos data/raw/scimagojr_wos.csv)
+          cmd=(python scripts/update_source_data.py --scimago data/raw/scimagojr.csv --wos data/raw/scimagojr_wos.csv --sinta data/raw/sinta.csv)
           if [[ -f data/raw/doaj.csv ]]; then
             cmd+=(--doaj data/raw/doaj.csv)
           fi

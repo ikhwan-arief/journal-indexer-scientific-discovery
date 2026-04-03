@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+"""Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id)
+Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
+"""
+
 import argparse
 import csv
 import sys

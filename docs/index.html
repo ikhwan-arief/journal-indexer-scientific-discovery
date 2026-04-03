@@ -1,17 +1,19 @@
 <!doctype html>
+<!-- Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id) -->
+<!-- Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) -->
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Journal Discovery | Match journal profiles from article abstracts</title>
-    <meta name="description" content="Search journal discovery data built from the active Scimago Journal Rank snapshot, with abstract-to-journal matching based on journal titles, categories, and areas.">
+    <meta name="description" content="Search journal discovery data built from Scimago, SINTA, WoS, and optional DOAJ enrichment, with abstract-to-journal matching based on journal titles, categories, areas, and SINTA subject areas.">
     <meta name="robots" content="index,follow">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'">
     
-    <link rel="stylesheet" href="assets/styles.css?v=2026-03-27+23%3A46+UTC">
-    <script defer src="assets/app.js?v=2026-03-27+23%3A46+UTC"></script>
+    <link rel="stylesheet" href="assets/styles.css?v=2026-04-03+01%3A59+UTC">
+    <script defer src="assets/app.js?v=2026-04-03+01%3A59+UTC"></script>
   </head>
-  <body data-page="home" data-site-root="." data-data-url="data/search-manifest.json?v=2026-03-27+23%3A46+UTC">
+  <body data-page="home" data-site-root="." data-data-url="data/search-manifest.json?v=2026-04-03+01%3A59+UTC">
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
       <div class="shell">
@@ -31,12 +33,12 @@
           <div class="hero-panel">
             <div class="hero-content">
               <h1>Find journals by title, keyword, URL fragment, or article abstract.</h1>
-              <p class="hero-copy">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Title</strong>, <strong>Categories</strong>, and <strong>Areas</strong>.</p>
+              <p class="hero-copy">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Title</strong>, <strong>Categories</strong>, <strong>Areas</strong>, and <strong>SINTA Subject Area</strong> when available.</p>
               <form class="abstract-search-form" id="search-form" action="./" method="get">
                 <input type="hidden" id="scope" name="scope" value="abstract">
                 <label class="field abstract-field" for="q">
                   <span>Paste article abstract</span>
-                  <textarea id="q" name="q" rows="6" placeholder="Paste an article abstract. The app compares it with journal titles, categories, and subject areas to suggest relevant journals."></textarea>
+                  <textarea id="q" name="q" rows="6" placeholder="Paste an article abstract. The app compares it with journal titles, categories, areas, and SINTA subject areas to suggest relevant journals."></textarea>
                 </label>
                 <div class="field hero-sort-field">
                   <label for="sort-order">Sort results</label>
@@ -61,9 +63,9 @@
             <div>
               <p class="eyebrow results-eyebrow">SEARCH RESULTS</p>
               <h2>Recommended journals</h2>
-              <p class="table-note">Results appear here only after you submit an abstract or keyword query. Rankings combine literal matching and lightweight NLP over journal titles, categories, and areas.</p>
+              <p class="table-note">Results appear here only after you submit an abstract or keyword query. Rankings combine literal matching and lightweight NLP over journal titles, categories, areas, and SINTA subject areas.</p>
             </div>
-            <div class="table-chip" id="results-summary">29,553 journal profiles ready</div>
+            <div class="table-chip" id="results-summary">40,051 journal profiles ready</div>
           </div>
           <div class="results-panel">
             <div class="results-toolbar">
@@ -87,7 +89,7 @@
     <footer class="site-footer">
       <div class="shell footer-grid">
         <div class="footer-note">Created by Ikhwan Arief (ikhwan[at]unand.ac.id). Available under CC BY-NC.</div>
-        <div class="footer-note">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
+        <div class="footer-note">Data sources: Scopus, Scimago Journal Rank (SJR), SINTA, WoS, and DOAJ.</div>
       </div>
     </footer>
   </body>

@@ -1,3 +1,8 @@
+/*
+Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id)
+Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
+*/
+
 const DASH_MARK = "—";
 const SEARCH_STOP_WORDS = new Set([
   "a", "an", "and", "are", "as", "at", "be", "been", "being", "by", "for", "from", "in", "into", "is", "it", "its", "of", "on", "onto",
@@ -55,12 +60,15 @@ const INDONESIAN_SUFFIX_RULES = [
 const ABSTRACT_TITLE_WEIGHT = 10;
 const ABSTRACT_CATEGORY_WEIGHT = 42;
 const ABSTRACT_AREA_WEIGHT = 30;
+const ABSTRACT_SUBJECT_AREA_WEIGHT = 34;
 const ABSTRACT_TITLE_PHRASE_WEIGHT = 24;
 const ABSTRACT_CATEGORY_PHRASE_WEIGHT = 38;
 const ABSTRACT_AREA_PHRASE_WEIGHT = 30;
+const ABSTRACT_SUBJECT_AREA_PHRASE_WEIGHT = 32;
 const ABSTRACT_TITLE_CONCEPT_WEIGHT = 16;
 const ABSTRACT_CATEGORY_CONCEPT_WEIGHT = 24;
 const ABSTRACT_AREA_CONCEPT_WEIGHT = 20;
+const ABSTRACT_SUBJECT_AREA_CONCEPT_WEIGHT = 22;
 const ABSTRACT_DETAIL_BONUS = 12;
 const ABSTRACT_PHRASE_DETAIL_BONUS = 10;
 const ABSTRACT_CONCEPT_DETAIL_BONUS = 8;
@@ -372,12 +380,15 @@ function buildAbstractTokenSignals(records) {
       ...(record.abstract_title_tokens || []),
       ...(record.abstract_category_specific_tokens || []),
       ...(record.abstract_area_specific_tokens || []),
+      ...(record.abstract_subject_area_specific_tokens || []),
       ...(record.title_phrase_tokens || []),
       ...(record.category_phrase_tokens || []),
       ...(record.area_phrase_tokens || []),
+      ...(record.subject_area_phrase_tokens || []),
       ...(record.title_concept_tokens || []),
       ...(record.category_concept_tokens || []),
       ...(record.area_concept_tokens || []),
+      ...(record.subject_area_concept_tokens || []),
     ]);
     for (const token of uniqueRecordTokens) {
       counts.set(token, (counts.get(token) || 0) + 1);
@@ -486,12 +497,46 @@ function quartilePriority(value) {
   return 0;
 }
 
+function accreditationPriority(value) {
+  if (value === "S1") return 6;
+  if (value === "S2") return 5;
+  if (value === "S3") return 4;
+  if (value === "S4") return 3;
+  if (value === "S5") return 2;
+  if (value === "S6") return 1;
+  return 0;
+}
+
 function journalMetricValue(record) {
   return Number(record.sjr_value || 0);
 }
 
 function journalHIndexValue(record) {
   return Number(record.h_index || 0);
+}
+
+function journalRankValue(record) {
+  const rank = Number(record.rank);
+  return Number.isFinite(rank) && rank > 0 ? rank : Number.POSITIVE_INFINITY;
+}
+
+function indexedLabelList(record) {
+  const labels = [];
+  if (record.scopus_indexed) labels.push("Scopus");
+  if (record.wos_indexed) labels.push("WoS");
+  if (record.doaj_indexed) labels.push("DOAJ");
+  if (record.sinta_url || record.accreditation || record.source_type === "sinta") labels.push("SINTA");
+  return labels;
+}
+
+function sourceMetaLabel(record) {
+  if (record.rank) {
+    return `Rank ${record.rank}`;
+  }
+  if (record.source_type === "sinta") {
+    return "SINTA profile";
+  }
+  return "Journal profile";
 }
 
 function createBadge(text, className) {
@@ -507,6 +552,8 @@ function createLabelRow(record) {
   if (record.scopus_indexed) wrapper.appendChild(createBadge("Scopus", "label-scopus"));
   if (record.wos_indexed) wrapper.appendChild(createBadge("WoS", "label-wos"));
   if (record.doaj_indexed) wrapper.appendChild(createBadge("DOAJ", "label-doaj"));
+  if (record.sinta_url || record.accreditation || record.source_type === "sinta") wrapper.appendChild(createBadge("SINTA", "label-sinta"));
+  if (record.accreditation) wrapper.appendChild(createBadge(record.accreditation, "label-accreditation"));
   if (record.sjr_best_quartile) wrapper.appendChild(createBadge(record.sjr_best_quartile, "label-quartile"));
   return wrapper;
 }
@@ -522,13 +569,15 @@ function prepareRecords(records) {
       continue;
     }
 
-    record.scopus_indexed = record.scopus_indexed !== false;
+    record.source_type = record.source_type || "scimago";
+    record.scopus_indexed = Boolean(record.scopus_indexed);
+    record.wos_indexed = Boolean(record.wos_indexed);
+    record.doaj_indexed = Boolean(record.doaj_indexed);
+    record.accreditation = accreditationPriority(record.accreditation) > 0 ? record.accreditation : null;
     record.profile_path = buildProfilePath(record);
 
-    const labels = ["Scopus"];
-    if (record.wos_indexed) labels.push("WoS");
-    if (record.doaj_indexed) labels.push("DOAJ");
-    record.index_summary = labels.join(", ");
+    const labels = indexedLabelList(record);
+    record.index_summary = labels.length ? labels.join(", ") : "";
 
     record.normalized_title = normalizeText(record.title || "");
     record.normalized_publisher = normalizeText(record.publisher || "");
@@ -536,9 +585,10 @@ function prepareRecords(records) {
     record.normalized_url = normalizeText(record.journal_url || "");
     record.normalized_categories = normalizeText(record.categories || "");
     record.normalized_areas = normalizeText(record.areas || "");
+    record.normalized_subject_area = normalizeText(record.subject_area || "");
     record.normalized_index_summary = normalizeText(record.index_summary);
     record.normalized_issns = normalizeText((record.issns || []).join(" "));
-    record.topic_text = normalizeText(`${record.categories || ""} ${record.areas || ""}`);
+    record.topic_text = normalizeText(`${record.categories || ""} ${record.areas || ""} ${record.subject_area || ""}`);
     record.sjr_value = Number(record.sjr_value || 0);
     record.h_index = Number(record.h_index || 0);
     record.search_text = [
@@ -549,6 +599,7 @@ function prepareRecords(records) {
       record.normalized_index_summary,
       record.normalized_categories,
       record.normalized_areas,
+      record.normalized_subject_area,
       record.normalized_issns,
     ].filter(Boolean).join(" ");
 
@@ -558,18 +609,22 @@ function prepareRecords(records) {
     record.url_tokens = tokenizeSearchText(record.journal_url || "");
     record.category_tokens = tokenizeSearchText(record.categories || "");
     record.area_tokens = tokenizeSearchText(record.areas || "");
+    record.subject_area_tokens = tokenizeSearchText(record.subject_area || "");
     record.title_phrase_tokens = extractPhraseTokens(record.title || "", { maxPhrases: ABSTRACT_RECORD_PHRASE_LIMIT });
     record.category_phrase_tokens = extractPhraseTokens(record.categories || "", { maxPhrases: ABSTRACT_RECORD_PHRASE_LIMIT });
     record.area_phrase_tokens = extractPhraseTokens(record.areas || "", { maxPhrases: ABSTRACT_RECORD_PHRASE_LIMIT });
+    record.subject_area_phrase_tokens = extractPhraseTokens(record.subject_area || "", { maxPhrases: ABSTRACT_RECORD_PHRASE_LIMIT });
     record.title_concept_tokens = extractConceptTokens(record.title || "");
     record.category_concept_tokens = extractConceptTokens(record.categories || "");
     record.area_concept_tokens = extractConceptTokens(record.areas || "");
+    record.subject_area_concept_tokens = extractConceptTokens(record.subject_area || "");
     record.index_tokens = tokenizeSearchText(record.index_summary);
     record.issn_tokens = tokenizeSearchText((record.issns || []).join(" "), { removeStopWords: false, applyStemming: false });
     record.abstract_title_tokens = record.title_tokens.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
     record.abstract_category_specific_tokens = record.category_tokens.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
     record.abstract_area_specific_tokens = record.area_tokens.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
-    record.topic_tokens = mergeTokenLists(record.category_tokens, record.area_tokens);
+    record.abstract_subject_area_specific_tokens = record.subject_area_tokens.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
+    record.topic_tokens = mergeTokenLists(record.category_tokens, record.area_tokens, record.subject_area_tokens);
     record.search_tokens = mergeTokenLists(
       record.title_tokens,
       record.publisher_tokens,
@@ -577,6 +632,7 @@ function prepareRecords(records) {
       record.url_tokens,
       record.category_tokens,
       record.area_tokens,
+      record.subject_area_tokens,
       record.index_tokens,
       record.issn_tokens
     );
@@ -587,12 +643,15 @@ function prepareRecords(records) {
     record.url_token_set = new Set(record.url_tokens);
     record.category_token_set = new Set(record.category_tokens);
     record.area_token_set = new Set(record.area_tokens);
+    record.subject_area_token_set = new Set(record.subject_area_tokens);
     record.title_phrase_token_set = new Set(record.title_phrase_tokens);
     record.category_phrase_token_set = new Set(record.category_phrase_tokens);
     record.area_phrase_token_set = new Set(record.area_phrase_tokens);
+    record.subject_area_phrase_token_set = new Set(record.subject_area_phrase_tokens);
     record.title_concept_token_set = new Set(record.title_concept_tokens);
     record.category_concept_token_set = new Set(record.category_concept_tokens);
     record.area_concept_token_set = new Set(record.area_concept_tokens);
+    record.subject_area_concept_token_set = new Set(record.subject_area_concept_tokens);
     record.topic_token_set = new Set(record.topic_tokens);
     record.search_token_set = new Set(record.search_tokens);
     record.issn_token_set = new Set(record.issn_tokens);
@@ -659,15 +718,18 @@ function abstractMatchSummary(record, query) {
   const titleMatches = tokenMatches(record.title_token_set, query.tokens);
   const categoryMatches = tokenMatches(record.category_token_set, query.tokens);
   const areaMatches = tokenMatches(record.area_token_set, query.tokens);
+  const subjectAreaMatches = tokenMatches(record.subject_area_token_set, query.tokens);
   const titlePhraseMatches = tokenMatches(record.title_phrase_token_set, query.phraseTokens);
   const categoryPhraseMatches = tokenMatches(record.category_phrase_token_set, query.phraseTokens);
   const areaPhraseMatches = tokenMatches(record.area_phrase_token_set, query.phraseTokens);
+  const subjectAreaPhraseMatches = tokenMatches(record.subject_area_phrase_token_set, query.phraseTokens);
   const titleConceptMatches = tokenMatches(record.title_concept_token_set, query.conceptTokens);
   const categoryConceptMatches = tokenMatches(record.category_concept_token_set, query.conceptTokens);
   const areaConceptMatches = tokenMatches(record.area_concept_token_set, query.conceptTokens);
-  const matchedTerms = mergeTokenLists(titleMatches, categoryMatches, areaMatches);
-  const matchedPhrases = mergeTokenLists(titlePhraseMatches, categoryPhraseMatches, areaPhraseMatches);
-  const matchedConcepts = mergeTokenLists(titleConceptMatches, categoryConceptMatches, areaConceptMatches);
+  const subjectAreaConceptMatches = tokenMatches(record.subject_area_concept_token_set, query.conceptTokens);
+  const matchedTerms = mergeTokenLists(titleMatches, categoryMatches, areaMatches, subjectAreaMatches);
+  const matchedPhrases = mergeTokenLists(titlePhraseMatches, categoryPhraseMatches, areaPhraseMatches, subjectAreaPhraseMatches);
+  const matchedConcepts = mergeTokenLists(titleConceptMatches, categoryConceptMatches, areaConceptMatches, subjectAreaConceptMatches);
   if (!matchedTerms.length && !matchedPhrases.length && !matchedConcepts.length) {
     return null;
   }
@@ -675,11 +737,13 @@ function abstractMatchSummary(record, query) {
   const specificTitleMatches = specificAbstractTokens(titleMatches);
   const specificCategoryMatches = specificAbstractTokens(categoryMatches);
   const specificAreaMatches = specificAbstractTokens(areaMatches);
-  const specificTerms = mergeTokenLists(specificTitleMatches, specificCategoryMatches, specificAreaMatches);
+  const specificSubjectAreaMatches = specificAbstractTokens(subjectAreaMatches);
+  const specificTerms = mergeTokenLists(specificTitleMatches, specificCategoryMatches, specificAreaMatches, specificSubjectAreaMatches);
   const matchedFieldCount = [
     mergeTokenLists(titleMatches, titlePhraseMatches, titleConceptMatches),
     mergeTokenLists(categoryMatches, categoryPhraseMatches, categoryConceptMatches),
     mergeTokenLists(areaMatches, areaPhraseMatches, areaConceptMatches),
+    mergeTokenLists(subjectAreaMatches, subjectAreaPhraseMatches, subjectAreaConceptMatches),
   ].filter((matches) => matches.length).length;
 
   const queryRelevantTokens = mergeTokenLists(
@@ -692,12 +756,15 @@ function abstractMatchSummary(record, query) {
     record.abstract_title_tokens,
     record.abstract_category_specific_tokens,
     record.abstract_area_specific_tokens,
+    record.abstract_subject_area_specific_tokens,
     record.title_phrase_tokens,
     record.category_phrase_tokens,
     record.area_phrase_tokens,
+    record.subject_area_phrase_tokens,
     record.title_concept_tokens,
     record.category_concept_tokens,
-    record.area_concept_tokens
+    record.area_concept_tokens,
+    record.subject_area_concept_tokens
   );
   const journalSpecificWeight = weightedAbstractTokenSum(journalSpecificTokens);
   const matchedSpecificTerms = mergeTokenLists(
@@ -711,21 +778,24 @@ function abstractMatchSummary(record, query) {
   const titleScore = Math.round(weightedAbstractTokenSum(specificTitleMatches) * ABSTRACT_TITLE_WEIGHT);
   const categoryScore = Math.round(weightedAbstractTokenSum(categoryMatches) * ABSTRACT_CATEGORY_WEIGHT);
   const areaScore = Math.round(weightedAbstractTokenSum(areaMatches) * ABSTRACT_AREA_WEIGHT);
+  const subjectAreaScore = Math.round(weightedAbstractTokenSum(subjectAreaMatches) * ABSTRACT_SUBJECT_AREA_WEIGHT);
   const titlePhraseScore = Math.round(weightedAbstractTokenSum(titlePhraseMatches) * ABSTRACT_TITLE_PHRASE_WEIGHT);
   const categoryPhraseScore = Math.round(weightedAbstractTokenSum(categoryPhraseMatches) * ABSTRACT_CATEGORY_PHRASE_WEIGHT);
   const areaPhraseScore = Math.round(weightedAbstractTokenSum(areaPhraseMatches) * ABSTRACT_AREA_PHRASE_WEIGHT);
+  const subjectAreaPhraseScore = Math.round(weightedAbstractTokenSum(subjectAreaPhraseMatches) * ABSTRACT_SUBJECT_AREA_PHRASE_WEIGHT);
   const titleConceptScore = Math.round(weightedAbstractTokenSum(titleConceptMatches) * ABSTRACT_TITLE_CONCEPT_WEIGHT);
   const categoryConceptScore = Math.round(weightedAbstractTokenSum(categoryConceptMatches) * ABSTRACT_CATEGORY_CONCEPT_WEIGHT);
   const areaConceptScore = Math.round(weightedAbstractTokenSum(areaConceptMatches) * ABSTRACT_AREA_CONCEPT_WEIGHT);
+  const subjectAreaConceptScore = Math.round(weightedAbstractTokenSum(subjectAreaConceptMatches) * ABSTRACT_SUBJECT_AREA_CONCEPT_WEIGHT);
   const detailScore = specificTerms.length * ABSTRACT_DETAIL_BONUS;
   const phraseDetailScore = matchedPhrases.length * ABSTRACT_PHRASE_DETAIL_BONUS;
   const conceptDetailScore = matchedConcepts.length * ABSTRACT_CONCEPT_DETAIL_BONUS;
   const fieldCoverageScore = Math.max(0, matchedFieldCount - 1) * ABSTRACT_FIELD_COVERAGE_BONUS;
   const alignmentScore = Math.round((precision * 80) + (recall * 35));
   const breadthPenalty = Math.round(Math.max(0, journalSpecificWeight - matchedSpecificWeight) * 4);
-  const baseScore = titleScore + categoryScore + areaScore + titlePhraseScore + categoryPhraseScore + areaPhraseScore
-    + titleConceptScore + categoryConceptScore + areaConceptScore + detailScore + phraseDetailScore
-    + conceptDetailScore + fieldCoverageScore;
+  const baseScore = titleScore + categoryScore + areaScore + subjectAreaScore + titlePhraseScore + categoryPhraseScore
+    + areaPhraseScore + subjectAreaPhraseScore + titleConceptScore + categoryConceptScore + areaConceptScore
+    + subjectAreaConceptScore + detailScore + phraseDetailScore + conceptDetailScore + fieldCoverageScore;
   const score = Math.max(1, baseScore + alignmentScore - breadthPenalty);
   const fitPercentage = Math.max(
     0,
@@ -736,6 +806,7 @@ function abstractMatchSummary(record, query) {
   if (mergeTokenLists(titleMatches, titlePhraseMatches, titleConceptMatches).length) fields.push("Title");
   if (mergeTokenLists(categoryMatches, categoryPhraseMatches, categoryConceptMatches).length) fields.push("Categories");
   if (mergeTokenLists(areaMatches, areaPhraseMatches, areaConceptMatches).length) fields.push("Areas");
+  if (mergeTokenLists(subjectAreaMatches, subjectAreaPhraseMatches, subjectAreaConceptMatches).length) fields.push("SINTA Subject Area");
 
   return {
     score,
@@ -762,6 +833,7 @@ function allScopeScore(record, query) {
     tokenMatches(record.title_token_set, query.tokens),
     tokenMatches(record.category_token_set, query.tokens),
     tokenMatches(record.area_token_set, query.tokens),
+    tokenMatches(record.subject_area_token_set, query.tokens),
     tokenMatches(record.publisher_token_set, query.tokens),
     tokenMatches(record.country_token_set, query.tokens),
     tokenMatches(record.url_token_set, query.tokens),
@@ -776,6 +848,7 @@ function allScopeScore(record, query) {
   score += tokenScore(record.title_token_set, query.tokens, 24);
   score += tokenScore(record.category_token_set, query.tokens, 18);
   score += tokenScore(record.area_token_set, query.tokens, 15);
+  score += tokenScore(record.subject_area_token_set, query.tokens, 16);
   score += tokenScore(record.publisher_token_set, query.tokens, 12);
   score += tokenScore(record.country_token_set, query.tokens, 8);
   score += tokenScore(record.url_token_set, query.tokens, 10);
@@ -827,12 +900,12 @@ function createInsightBox(insight, fitPercentage) {
   wrapper.appendChild(heading);
 
   const description = document.createElement("span");
-  const fieldLabel = insight.fields.length ? insight.fields.join(" and ") : "journal topics";
+  const fieldLabel = insight.fields.length ? insight.fields.join(", ") : "journal topics";
   description.textContent = `Matched terms found in ${fieldLabel}: ${insight.terms.join(", ")}.`;
   wrapper.appendChild(description);
 
   const guidance = document.createElement("span");
-  guidance.textContent = "100% means the abstract aligns very strongly with this journal's Title, Categories, and Areas. Generic method words count less than specific topic terms. Compare this percentage within the current search only; it is not a journal quality metric.";
+  guidance.textContent = "100% means the abstract aligns very strongly with this journal's Title, Categories, Areas, and SINTA Subject Area when available. Generic method words count less than specific topic terms. Compare this percentage within the current search only; it is not a journal quality metric.";
   wrapper.appendChild(guidance);
 
   return wrapper;
@@ -848,6 +921,10 @@ function createResultSummary(record) {
     `Best quartile: ${safeText(record.sjr_best_quartile, DASH_MARK)}`,
   ];
 
+  if (record.accreditation) {
+    summaryItems.push(`Accreditation: ${record.accreditation}`);
+  }
+
   if (record.sjr_display) {
     summaryItems.push(`SJR: ${record.sjr_display}`);
   }
@@ -857,6 +934,10 @@ function createResultSummary(record) {
 
   if (record.index_summary) {
     summaryItems.push(`Indexed in: ${record.index_summary}`);
+  }
+
+  if (record.subject_area) {
+    summaryItems.push(`Subject area: ${record.subject_area}`);
   }
 
   wrapper.textContent = summaryItems.join(" • ");
@@ -872,6 +953,9 @@ function abstractFitValue(entry) {
 }
 
 function compareMetricPriority(left, right) {
+  const accreditationGap = accreditationPriority(right.record.accreditation) - accreditationPriority(left.record.accreditation);
+  if (accreditationGap !== 0) return accreditationGap;
+
   const leftMetric = journalMetricValue(left.record);
   const rightMetric = journalMetricValue(right.record);
   if (rightMetric !== leftMetric) return rightMetric - leftMetric;
@@ -882,7 +966,9 @@ function compareMetricPriority(left, right) {
 
   const quartileGap = quartilePriority(right.record.sjr_best_quartile) - quartilePriority(left.record.sjr_best_quartile);
   if (quartileGap !== 0) return quartileGap;
-  if (left.record.rank !== right.record.rank) return left.record.rank - right.record.rank;
+  const leftRank = journalRankValue(left.record);
+  const rightRank = journalRankValue(right.record);
+  if (leftRank !== rightRank) return leftRank - rightRank;
   return left.record.title.localeCompare(right.record.title);
 }
 
@@ -973,11 +1059,35 @@ function setMetaContent(selector, value) {
 }
 
 function updateProfileMetadata(record) {
-  const description = `${record.title} journal profile with indexing labels, publisher, country, ISSN, website availability, APC status, license, and SJR best quartile.`;
+  const description = `${record.title} journal profile with indexing labels, accreditation, publisher, country, ISSN, website availability, APC status, license, SINTA metadata, and SJR best quartile.`;
   document.title = `${record.title} | Journal Discovery`;
   setMetaContent('meta[name="description"]', description);
   setMetaContent('meta[property="og:title"]', record.title);
   setMetaContent('meta[property="og:description"]', description);
+}
+
+function createAccreditationHighlight(record) {
+  if (record.country !== "Indonesia" || !record.accreditation) {
+    return null;
+  }
+
+  const indexLabels = indexedLabelList(record);
+  if (!indexLabels.length) {
+    return null;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "status-highlight";
+
+  const heading = document.createElement("strong");
+  heading.textContent = "Indonesia accreditation and indexing";
+  wrapper.appendChild(heading);
+
+  const body = document.createElement("span");
+  body.textContent = `Accredited at ${record.accreditation}. Indexed in ${indexLabels.join(", ")}.`;
+  wrapper.appendChild(body);
+
+  return wrapper;
 }
 
 function createEmptyState(titleText, bodyText) {
@@ -1061,9 +1171,13 @@ function renderProfilePage(record, siteRoot) {
   heroPanel.appendChild(title);
   const copy = document.createElement("p");
   copy.className = "profile-copy";
-  copy.textContent = "This page brings together journal details, indexing labels, and access information when available.";
+  copy.textContent = "This page brings together journal details, accreditation, indexing labels, and access information when available.";
   heroPanel.appendChild(copy);
   heroPanel.appendChild(createLabelRow(record));
+  const highlight = createAccreditationHighlight(record);
+  if (highlight) {
+    heroPanel.appendChild(highlight);
+  }
 
   const heroLinks = document.createElement("div");
   heroLinks.className = "profile-links";
@@ -1096,16 +1210,20 @@ function renderProfilePage(record, siteRoot) {
   main.className = "profile-main detail-grid";
   main.appendChild(buildDetailItem("Website", record.journal_url, siteRoot, true));
   main.appendChild(buildDetailItem("Publisher", record.publisher));
+  main.appendChild(buildDetailItem("Affiliation", record.affiliation));
   main.appendChild(buildDetailItem("Country", record.country));
   main.appendChild(buildDetailItem("Region", record.region));
   main.appendChild(buildDetailItem("Indexed In", record.index_summary));
+  main.appendChild(buildDetailItem("Accreditation", record.accreditation));
   main.appendChild(buildDetailItem("Best SJR Quartile", record.sjr_best_quartile));
   main.appendChild(buildDetailItem("Directory Quartile Label", record.sjr_quartile));
   main.appendChild(buildDetailItem("APC Status", record.apc_status));
   main.appendChild(buildDetailItem("License", record.license));
   main.appendChild(buildDetailItem("Author Holds Copyright", record.author_holds_copyright));
+  main.appendChild(buildDetailItem("SINTA Profile", record.sinta_url, siteRoot, true));
   main.appendChild(buildDetailItem("ISSN", (record.issns || []).join(", ")));
   main.appendChild(buildDetailItem("Coverage", record.coverage));
+  main.appendChild(buildDetailItem("SINTA Subject Area", record.subject_area));
   main.appendChild(buildDetailItem("Categories", record.categories));
   main.appendChild(buildDetailItem("Areas", record.areas));
   main.appendChild(buildDetailItem("Open Access", record.open_access));
@@ -1115,9 +1233,10 @@ function renderProfilePage(record, siteRoot) {
   const side = document.createElement("aside");
   side.className = "profile-side detail-grid";
   side.appendChild(buildDetailItem("Source ID", record.sourceid));
+  side.appendChild(buildDetailItem("Record Source", record.source_type === "sinta" ? "SINTA" : "Scimago"));
   side.appendChild(buildNavigationDetailItem("Search", searchUrl, "Search similar journals", `Search journals similar to ${record.title}`));
   side.appendChild(buildNavigationDetailItem("Navigation", joinRelative(siteRoot, ""), "Back to home", "Return to the search homepage"));
-  side.appendChild(buildDetailItem("Data note", "Website, APC, license, and copyright details are shown when available."));
+  side.appendChild(buildDetailItem("Data note", "Website, accreditation, SINTA subject area, APC, license, and copyright details are shown when available."));
   layout.appendChild(side);
 
   card.appendChild(layout);
@@ -1182,6 +1301,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
   const queryInput = document.querySelector("#q");
   const scopeField = document.querySelector("#scope");
   const indexSelect = document.querySelector("#index-filter");
+  const accreditationSelect = document.querySelector("#accreditation-filter");
   const quartileSelect = document.querySelector("#quartile-filter");
   const countrySelect = document.querySelector("#country-filter");
   const sortSelect = document.querySelector("#sort-order");
@@ -1221,6 +1341,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
   queryInput.value = params.get("q") || "";
   scopeField.value = params.get("scope") || (pageMode === "home" ? "abstract" : "all");
   if (indexSelect) indexSelect.value = params.get("index") || "all";
+  if (accreditationSelect) accreditationSelect.value = params.get("accreditation") || "all";
   if (quartileSelect) quartileSelect.value = params.get("quartile") || "all";
   if (countrySelect) countrySelect.value = params.get("country") || "all";
   if (sortSelect) sortSelect.value = normalizeSortOrder(params.get("sort") || "default");
@@ -1252,15 +1373,17 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
     const scope = currentScope();
     const query = buildProcessedQuery(queryInput.value, scope);
     const indexFilter = indexSelect?.value || "all";
+    const accreditationFilter = accreditationSelect?.value || "all";
     const quartileFilter = quartileSelect?.value || "all";
     const countryFilter = countrySelect?.value || "all";
     const sortOrder = alignSortWithScope(scope);
-    const hasFilters = indexFilter !== "all" || quartileFilter !== "all" || countryFilter !== "all";
+    const hasFilters = indexFilter !== "all" || accreditationFilter !== "all" || quartileFilter !== "all" || countryFilter !== "all";
 
     return {
       scope,
       query,
       indexFilter,
+      accreditationFilter,
       quartileFilter,
       countryFilter,
       sortOrder,
@@ -1420,6 +1543,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
       if (state.indexFilter === "wos" && !record.wos_indexed) continue;
       if (state.indexFilter === "doaj" && !record.doaj_indexed) continue;
       if (state.indexFilter === "scopus" && !record.scopus_indexed) continue;
+      if (state.accreditationFilter !== "all" && record.accreditation !== state.accreditationFilter) continue;
       if (state.quartileFilter !== "all" && record.sjr_best_quartile !== state.quartileFilter) continue;
       if (state.countryFilter !== "all" && record.country !== state.countryFilter) continue;
 
@@ -1440,7 +1564,10 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
           const fitGap = abstractFitValue(right) - abstractFitValue(left);
           if (fitGap !== 0) return fitGap;
         }
-        if (right.score !== left.score) return right.score - left.score;
+      }
+
+      if (useQuery && right.score !== left.score) {
+        return right.score - left.score;
       }
 
       return compareMetricPriority(left, right);
@@ -1463,6 +1590,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
     }
     if (pageMode === "search") {
       if (state.indexFilter !== "all") nextParams.set("index", state.indexFilter);
+      if (state.accreditationFilter !== "all") nextParams.set("accreditation", state.accreditationFilter);
       if (state.quartileFilter !== "all") nextParams.set("quartile", state.quartileFilter);
       if (state.countryFilter !== "all") nextParams.set("country", state.countryFilter);
     }
@@ -1514,7 +1642,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
 
       const meta = document.createElement("p");
       meta.className = "profile-meta";
-      meta.textContent = `Rank ${safeText(record.rank, "-")}`;
+      meta.textContent = sourceMetaLabel(record);
       article.appendChild(meta);
 
       article.appendChild(createResultSummary(record));
@@ -1525,6 +1653,8 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
       const main = document.createElement("div");
       main.className = "profile-main detail-grid";
       main.appendChild(buildDetailItem("Website", record.journal_url, siteRoot, true));
+      main.appendChild(buildDetailItem("Affiliation", record.affiliation));
+      main.appendChild(buildDetailItem("SINTA Subject Area", record.subject_area));
       main.appendChild(buildDetailItem("Categories", record.categories));
       main.appendChild(buildDetailItem("Areas", record.areas));
       main.appendChild(buildDetailItem("APC Status", record.apc_status));
@@ -1533,9 +1663,13 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
 
       const side = document.createElement("aside");
       side.className = "profile-side detail-grid";
+      side.appendChild(buildDetailItem("Accreditation", record.accreditation));
       side.appendChild(buildDetailItem("Best SJR Quartile", record.sjr_best_quartile));
       side.appendChild(buildDetailItem("Author Holds Copyright", record.author_holds_copyright));
       side.appendChild(buildDetailItem("ISSN", (record.issns || []).join(", ")));
+      if (record.sinta_url) {
+        side.appendChild(buildDetailItem("SINTA Profile", record.sinta_url, siteRoot, true));
+      }
       if (state.scope === "abstract" && abstractSummary) {
         side.appendChild(createInsightBox(abstractSummary, abstractSummary.fitPercentage));
       }
@@ -1592,7 +1726,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
     });
   });
 
-  for (const element of [scopeField, indexSelect, quartileSelect, countrySelect].filter(Boolean)) {
+  for (const element of [scopeField, indexSelect, accreditationSelect, quartileSelect, countrySelect].filter(Boolean)) {
     element.addEventListener("change", () => {
       if (element === scopeField && sortSelect && currentScope() !== "abstract") {
         sortSelect.value = "default";

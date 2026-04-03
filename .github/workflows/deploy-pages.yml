@@ -39,7 +39,7 @@ jobs:
       - name: Run guarded dataset refresh workflow
         env:
           SITE_URL: ${{ vars.SITE_URL }}
-        run: python scripts/update_source_data.py --scimago data/raw/scimagojr.csv --wos data/raw/scimagojr_wos.csv --doaj data/raw/doaj.csv
+        run: python scripts/update_source_data.py --scimago data/raw/scimagojr.csv --wos data/raw/scimagojr_wos.csv --sinta data/raw/sinta.csv --doaj data/raw/doaj.csv
 
       - name: Upload artifact
         if: github.event_name != 'pull_request'

@@ -1,3 +1,8 @@
+/*
+Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id)
+Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
+*/
+
 .hero-panel {
   display: flex;
   flex-direction: row;
@@ -676,6 +681,16 @@ tbody tr:last-child td {
   color: var(--success);
 }
 
+.label-sinta {
+  background: rgba(230, 90, 44, 0.14);
+  color: #9f3d18;
+}
+
+.label-accreditation {
+  background: rgba(140, 56, 139, 0.12);
+  color: #6d286c;
+}
+
 .label-quartile {
   background: rgba(178, 58, 72, 0.12);
   color: var(--danger);
@@ -892,6 +907,22 @@ tbody tr:last-child td {
 }
 
 .match-insight strong {
+  color: var(--ink);
+}
+
+.status-highlight {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: rgba(140, 56, 139, 0.08);
+  border: 1px solid rgba(140, 56, 139, 0.16);
+  color: #5f265f;
+}
+
+.status-highlight strong {
   color: var(--ink);
 }
 

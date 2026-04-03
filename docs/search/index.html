@@ -1,17 +1,19 @@
 <!doctype html>
+<!-- Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id) -->
+<!-- Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) -->
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Search Journal Profiles | Journal Discovery</title>
-    <meta name="description" content="Search journal profiles by abstract, keyword, full title, publisher, URL fragment, country, indexing status, or best SJR quartile.">
+    <meta name="description" content="Search journal profiles by abstract, keyword, full title, publisher, URL fragment, country, indexing status, accreditation, or best SJR quartile.">
     <meta name="robots" content="index,follow">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'">
     
-    <link rel="stylesheet" href="../assets/styles.css?v=2026-03-27+23%3A46+UTC">
-    <script defer src="../assets/app.js?v=2026-03-27+23%3A46+UTC"></script>
+    <link rel="stylesheet" href="../assets/styles.css?v=2026-04-03+01%3A59+UTC">
+    <script defer src="../assets/app.js?v=2026-04-03+01%3A59+UTC"></script>
   </head>
-  <body data-page="search" data-site-root=".." data-data-url="../data/search-manifest.json?v=2026-03-27+23%3A46+UTC">
+  <body data-page="search" data-site-root=".." data-data-url="../data/search-manifest.json?v=2026-04-03+01%3A59+UTC">
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
       <div class="shell">
@@ -31,7 +33,7 @@
           <div class="hero-panel">
             <div class="hero-content">
               <h1>Search journal profiles by abstract, keyword, title, publisher, or URL.</h1>
-              <p class="hero-copy">Use abstract matching for recommendations, or switch scope and filters for a more precise search across journal metadata.</p>
+              <p class="hero-copy">Use abstract matching for recommendations, or switch scope and filters for a more precise search across journal metadata, accreditation, and indexing status.</p>
             </div>
           </div>
         </div>
@@ -43,9 +45,9 @@
             <div>
               <p class="eyebrow results-eyebrow">ADVANCED SEARCH</p>
               <h2>Search journal profiles</h2>
-              <p class="table-note">Search by abstract, keyword, title, publisher, URL fragment, indexing status, best quartile, or country. Choosing <strong>Highest abstract fit</strong> will switch the scope to abstract matching automatically.</p>
+              <p class="table-note">Search by abstract, keyword, title, publisher, URL fragment, indexing status, accreditation, best quartile, or country. Choosing <strong>Highest abstract fit</strong> will switch the scope to abstract matching automatically.</p>
             </div>
-            <div class="table-chip" id="results-summary">29,553 journal profiles ready</div>
+            <div class="table-chip" id="results-summary">40,051 journal profiles ready</div>
           </div>
           <div class="filter-panel">
             <form id="search-form" action="./" method="get" class="search-form-grid">
@@ -71,6 +73,18 @@
                     <option value="scopus">Scopus only</option>
                     <option value="wos">WoS only</option>
                     <option value="doaj">DOAJ only</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="accreditation-filter">Accreditation</label>
+                  <select id="accreditation-filter" name="accreditation">
+                    <option value="all">All accreditation levels</option>
+                    <option value="S1">S1</option>
+                    <option value="S2">S2</option>
+                    <option value="S3">S3</option>
+                    <option value="S4">S4</option>
+                    <option value="S5">S5</option>
+                    <option value="S6">S6</option>
                   </select>
                 </div>
                 <div class="field">
@@ -125,7 +139,7 @@
     <footer class="site-footer">
       <div class="shell footer-grid">
         <div class="footer-note">Created by Ikhwan Arief (ikhwan[at]unand.ac.id). Available under CC BY-NC.</div>
-        <div class="footer-note">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
+        <div class="footer-note">Data sources: Scopus, Scimago Journal Rank (SJR), SINTA, WoS, and DOAJ.</div>
       </div>
     </footer>
   </body>

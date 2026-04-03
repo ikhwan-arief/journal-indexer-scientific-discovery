@@ -1,3 +1,7 @@
+"""Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id)
+Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -16,6 +20,7 @@ BACKUP_ROOT = BUILD_DIR / "dataset-backups"
 SCIMAGO_TARGET = RAW_DIR / "scimagojr.csv"
 WOS_TARGET = RAW_DIR / "scimagojr_wos.csv"
 DOAJ_TARGET = RAW_DIR / "doaj.csv"
+SINTA_TARGET = RAW_DIR / "sinta.csv"
 
 BUILD_SCRIPT = ROOT / "scripts" / "build_site.py"
 VALIDATE_SCRIPT = ROOT / "scripts" / "validate_generated_data.py"
@@ -38,6 +43,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--scimago", required=True, type=existing_file, help="Path to the replacement scimagojr.csv file.")
     parser.add_argument("--wos", required=True, type=existing_file, help="Path to the replacement scimagojr_wos.csv file.")
+    parser.add_argument("--sinta", required=True, type=existing_file, help="Path to the replacement sinta.csv file.")
     parser.add_argument("--doaj", type=existing_file, help="Optional path to the replacement doaj.csv file.")
     parser.add_argument(
         "--skip-smoke-test",
@@ -84,6 +90,7 @@ def main() -> int:
     update_plan: dict[Path, Path] = {
         args.scimago: SCIMAGO_TARGET,
         args.wos: WOS_TARGET,
+        args.sinta: SINTA_TARGET,
     }
     if args.doaj:
         update_plan[args.doaj] = DOAJ_TARGET
@@ -118,6 +125,7 @@ def main() -> int:
     print("Dataset update completed successfully.")
     print(f"Active Scimago file: {SCIMAGO_TARGET}")
     print(f"Active WoS file: {WOS_TARGET}")
+    print(f"Active SINTA file: {SINTA_TARGET}")
     if args.doaj:
         print(f"Active DOAJ file: {DOAJ_TARGET}")
     print(f"Backup snapshot: {backup_dir}")

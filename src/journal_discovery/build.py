@@ -1,3 +1,7 @@
+"""Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id)
+Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
+"""
+
 from __future__ import annotations
 
 import csv
@@ -22,14 +26,18 @@ ASSET_DIR = Path(__file__).resolve().parent / "assets"
 MAIN_CSV = RAW_DIR / "scimagojr.csv"
 WOS_CSV = RAW_DIR / "scimagojr_wos.csv"
 DOAJ_CSV = RAW_DIR / "doaj.csv"
+SINTA_CSV = RAW_DIR / "sinta.csv"
 DEFAULT_SITE_URL = os.getenv("SITE_URL", "").rstrip("/")
 NOT_AVAILABLE = "Not available"
+INDONESIA_REGION = "Asiatic Region"
+VALID_ACCREDITATIONS = {"S1", "S2", "S3", "S4", "S5", "S6"}
 
 
 @dataclass(slots=True)
 class JournalRecord:
-    rank: int
+    rank: int | None
     sourceid: str
+    source_type: str
     title: str
     publisher: str | None
     country: str | None
@@ -46,6 +54,10 @@ class JournalRecord:
     scopus_indexed: bool
     wos_indexed: bool
     doaj_indexed: bool
+    accreditation: str | None
+    sinta_url: str | None
+    subject_area: str | None
+    affiliation: str | None
     journal_url: str | None
     apc_status: str | None
     license: str | None
@@ -75,6 +87,8 @@ class JournalRecord:
             labels.append("WoS")
         if self.doaj_indexed:
             labels.append("DOAJ")
+        if self.sinta_url or self.accreditation or self.source_type == "sinta":
+            labels.append("SINTA")
         return ", ".join(labels) if labels else NOT_AVAILABLE
 
     @property
@@ -95,15 +109,21 @@ class JournalRecord:
         return {
             "rank": self.rank,
             "sourceid": self.sourceid,
+            "source_type": self.source_type,
             "title": self.title,
             "publisher": self.publisher,
             "country": self.country,
-        "categories": self.categories,
-        "areas": self.areas,
+            "categories": self.categories,
+            "areas": self.areas,
+            "subject_area": self.subject_area,
+            "accreditation": self.accreditation,
+            "affiliation": self.affiliation,
             "sjr_quartile": self.sjr_quartile,
+            "scopus_indexed": self.scopus_indexed,
             "wos_indexed": self.wos_indexed,
             "doaj_indexed": self.doaj_indexed,
             "journal_url": self.journal_url,
+            "sinta_url": self.sinta_url,
             "slug": self.slug,
         }
 
@@ -111,6 +131,7 @@ class JournalRecord:
         return {
             "rank": self.rank,
             "sourceid": self.sourceid,
+            "source_type": self.source_type,
             "title": self.title,
             "publisher": self.publisher,
             "country": self.country,
@@ -124,8 +145,13 @@ class JournalRecord:
             "sjr_quartile": self.sjr_quartile,
             "sjr_best_quartile": self.sjr_best_quartile,
             "h_index": self.h_index,
+            "scopus_indexed": self.scopus_indexed,
             "wos_indexed": self.wos_indexed,
             "doaj_indexed": self.doaj_indexed,
+            "accreditation": self.accreditation,
+            "sinta_url": self.sinta_url,
+            "subject_area": self.subject_area,
+            "affiliation": self.affiliation,
             "journal_url": self.journal_url,
             "apc_status": self.apc_status,
             "license": self.license,
@@ -164,6 +190,20 @@ class DoajRecord:
     apc_status: str | None
     license: str | None
     author_holds_copyright: str | None
+
+
+@dataclass(slots=True)
+class SintaRecord:
+    profile_id: str
+    title: str
+    normalized_title: str
+    issns: list[str]
+    subject_area: str | None
+    affiliation: str | None
+    accreditation: str | None
+    scopus_indexed: bool
+    journal_url: str | None
+    sinta_url: str
 
 
 def normalize_text(value: str) -> str:
@@ -210,6 +250,15 @@ def normalize_yes_no(value: str | None) -> str | None:
     return (value or "").strip() or None
 
 
+def normalize_accreditation(value: str | None) -> str | None:
+    cleaned = (value or "").strip().upper()
+    return cleaned if cleaned in VALID_ACCREDITATIONS else None
+
+
+def parse_yes_no_bool(value: str | None) -> bool:
+    return normalize_yes_no(value) == "Yes"
+
+
 def parse_decimal_metric(value: str | None) -> float | None:
     cleaned = (value or "").strip()
     if not cleaned:
@@ -244,10 +293,18 @@ def read_csv_rows(path: Path) -> list[dict[str, str]]:
         return list(reader)
 
 
-def read_doaj_rows(path: Path) -> list[dict[str, str]]:
+def read_plain_csv_rows(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         return list(reader)
+
+
+def read_doaj_rows(path: Path) -> list[dict[str, str]]:
+    return read_plain_csv_rows(path)
+
+
+def read_sinta_rows(path: Path) -> list[dict[str, str]]:
+    return read_plain_csv_rows(path)
 
 
 def load_wos_sourceids(path: Path) -> set[str]:
@@ -257,6 +314,50 @@ def load_wos_sourceids(path: Path) -> set[str]:
         if sourceid:
             sourceids.add(sourceid)
     return sourceids
+
+
+def extract_sinta_profile_id(url: str | None) -> str | None:
+    match = re.search(r"/profile/(\d+)", (url or "").strip())
+    return match.group(1) if match else None
+
+
+def load_sinta_records(path: Path) -> list[SintaRecord]:
+    if not path.exists():
+        raise FileNotFoundError(f"Missing source dataset: {path}")
+
+    records: list[SintaRecord] = []
+    for row in read_sinta_rows(path):
+        title = (row.get("Journal Name") or "").strip()
+        sinta_url = safe_url(row.get("Sinta URL"))
+        profile_id = extract_sinta_profile_id(sinta_url)
+        if not title or not sinta_url or not profile_id:
+            continue
+
+        records.append(
+            SintaRecord(
+                profile_id=profile_id,
+                title=title,
+                normalized_title=normalize_text(title),
+                issns=normalize_issns(
+                    ",".join(
+                        value
+                        for value in (
+                            row.get("P-ISSN"),
+                            row.get("E-ISSN"),
+                        )
+                        if value
+                    )
+                ),
+                subject_area=(row.get("Subject Area") or "").strip() or None,
+                affiliation=(row.get("Affiliation") or "").strip() or None,
+                accreditation=normalize_accreditation(row.get("Accreditation")),
+                scopus_indexed=parse_yes_no_bool(row.get("Scopus Indexed")),
+                journal_url=safe_url(row.get("Website URL")),
+                sinta_url=sinta_url,
+            )
+        )
+
+    return records
 
 
 def load_doaj_lookups(path: Path) -> tuple[dict[str, DoajRecord], dict[str, DoajRecord]]:
@@ -321,18 +422,96 @@ def match_doaj_record(
     return title_lookup.get(normalize_text(title))
 
 
+def build_unique_source_lookups(
+    rows: Iterable[dict[str, str]],
+) -> tuple[dict[str, str], dict[str, str]]:
+    issn_groups: dict[str, list[str]] = {}
+    title_groups: dict[str, list[str]] = {}
+
+    for row in rows:
+        sourceid = (row.get("Sourceid") or "").strip()
+        title = (row.get("Title") or "").strip()
+        if not sourceid or not title:
+            continue
+
+        for issn in normalize_issns(row.get("Issn") or ""):
+            issn_groups.setdefault(issn, []).append(sourceid)
+        title_groups.setdefault(normalize_text(title), []).append(sourceid)
+
+    unique_issn_lookup = {
+        issn: sourceids[0]
+        for issn, sourceids in issn_groups.items()
+        if len(sourceids) == 1
+    }
+    unique_title_lookup = {
+        normalized_title: sourceids[0]
+        for normalized_title, sourceids in title_groups.items()
+        if len(sourceids) == 1
+    }
+    return unique_issn_lookup, unique_title_lookup
+
+
+def match_scimago_sourceid(
+    sinta_record: SintaRecord,
+    issn_lookup: dict[str, str],
+    title_lookup: dict[str, str],
+) -> tuple[str | None, str | None]:
+    for issn in sinta_record.issns:
+        sourceid = issn_lookup.get(issn)
+        if sourceid:
+            return sourceid, "issn"
+
+    if sinta_record.normalized_title:
+        sourceid = title_lookup.get(sinta_record.normalized_title)
+        if sourceid:
+            return sourceid, "title"
+
+    return None, None
+
+
+def accreditation_priority(value: str | None) -> int:
+    if value == "S1":
+        return 6
+    if value == "S2":
+        return 5
+    if value == "S3":
+        return 4
+    if value == "S4":
+        return 3
+    if value == "S5":
+        return 2
+    if value == "S6":
+        return 1
+    return 0
+
+
+def sinta_merge_preference(record: SintaRecord, match_kind: str | None) -> tuple[int, int, int, int, int]:
+    return (
+        1 if match_kind == "issn" else 0,
+        accreditation_priority(record.accreditation),
+        len(record.subject_area or ""),
+        len(record.affiliation or ""),
+        -int(record.profile_id),
+    )
+
+
 def build_records() -> list[JournalRecord]:
     if not MAIN_CSV.exists():
         raise FileNotFoundError(f"Missing source dataset: {MAIN_CSV}")
     if not WOS_CSV.exists():
         raise FileNotFoundError(f"Missing source dataset: {WOS_CSV}")
+    if not SINTA_CSV.exists():
+        raise FileNotFoundError(f"Missing source dataset: {SINTA_CSV}")
 
+    scimago_rows = [row for row in read_csv_rows(MAIN_CSV) if (row.get("Type") or "").strip().lower() == "journal"]
     wos_sourceids = load_wos_sourceids(WOS_CSV)
     doaj_issn_lookup, doaj_title_lookup = load_doaj_lookups(DOAJ_CSV)
+    sinta_records = load_sinta_records(SINTA_CSV)
+    unique_issn_lookup, unique_title_lookup = build_unique_source_lookups(scimago_rows)
+
     records: list[JournalRecord] = []
-    for row in read_csv_rows(MAIN_CSV):
-        if (row.get("Type") or "").strip().lower() != "journal":
-            continue
+    records_by_sourceid: dict[str, JournalRecord] = {}
+    for row in scimago_rows:
         sourceid = (row.get("Sourceid") or "").strip()
         title = (row.get("Title") or "").strip()
         if not sourceid or not title:
@@ -341,8 +520,9 @@ def build_records() -> list[JournalRecord]:
         issns = normalize_issns(row.get("Issn") or "")
         doaj_record = match_doaj_record(title, issns, doaj_issn_lookup, doaj_title_lookup)
         record = JournalRecord(
-            rank=int((row.get("Rank") or "0").strip() or 0),
+            rank=int((row.get("Rank") or "0").strip() or 0) or None,
             sourceid=sourceid,
+            source_type="scimago",
             title=title,
             publisher=(row.get("Publisher") or "").strip() or None,
             country=(row.get("Country") or "").strip() or None,
@@ -359,6 +539,10 @@ def build_records() -> list[JournalRecord]:
             scopus_indexed=True,
             wos_indexed=sourceid in wos_sourceids,
             doaj_indexed=doaj_record is not None,
+            accreditation=None,
+            sinta_url=None,
+            subject_area=None,
+            affiliation=None,
             journal_url=doaj_record.journal_url if doaj_record else None,
             apc_status=doaj_record.apc_status if doaj_record else None,
             license=doaj_record.license if doaj_record else None,
@@ -372,8 +556,81 @@ def build_records() -> list[JournalRecord]:
             normalized_url=normalize_text(doaj_record.journal_url or "") if doaj_record else "",
         )
         records.append(record)
+        records_by_sourceid[sourceid] = record
 
-    records.sort(key=lambda record: (record.rank, record.title))
+    selected_sinta_by_sourceid: dict[str, tuple[SintaRecord, str | None]] = {}
+    unmatched_sinta_records: list[SintaRecord] = []
+    for sinta_record in sinta_records:
+        sourceid, match_kind = match_scimago_sourceid(sinta_record, unique_issn_lookup, unique_title_lookup)
+        if not sourceid:
+            unmatched_sinta_records.append(sinta_record)
+            continue
+
+        current = selected_sinta_by_sourceid.get(sourceid)
+        if current is None or sinta_merge_preference(sinta_record, match_kind) > sinta_merge_preference(current[0], current[1]):
+            selected_sinta_by_sourceid[sourceid] = (sinta_record, match_kind)
+
+    for sourceid, (sinta_record, _) in selected_sinta_by_sourceid.items():
+        record = records_by_sourceid.get(sourceid)
+        if record is None:
+            continue
+
+        record.accreditation = sinta_record.accreditation
+        record.sinta_url = sinta_record.sinta_url
+        record.subject_area = sinta_record.subject_area
+        record.affiliation = sinta_record.affiliation
+        if not record.journal_url and sinta_record.journal_url:
+            record.journal_url = sinta_record.journal_url
+        record.normalized_url = normalize_text(record.journal_url or "")
+
+    for sinta_record in unmatched_sinta_records:
+        doaj_record = match_doaj_record(sinta_record.title, sinta_record.issns, doaj_issn_lookup, doaj_title_lookup)
+        journal_url = doaj_record.journal_url if doaj_record else sinta_record.journal_url
+        record = JournalRecord(
+            rank=None,
+            sourceid=f"sinta-{sinta_record.profile_id}",
+            source_type="sinta",
+            title=sinta_record.title,
+            publisher=sinta_record.affiliation,
+            country="Indonesia",
+            region=INDONESIA_REGION,
+            issns=sinta_record.issns,
+            coverage=None,
+            categories=None,
+            areas=None,
+            sjr_value=None,
+            sjr_display=None,
+            sjr_quartile=None,
+            sjr_best_quartile=None,
+            h_index=None,
+            scopus_indexed=sinta_record.scopus_indexed,
+            wos_indexed=False,
+            doaj_indexed=doaj_record is not None,
+            accreditation=sinta_record.accreditation,
+            sinta_url=sinta_record.sinta_url,
+            subject_area=sinta_record.subject_area,
+            affiliation=sinta_record.affiliation,
+            journal_url=journal_url,
+            apc_status=doaj_record.apc_status if doaj_record else None,
+            license=doaj_record.license if doaj_record else None,
+            author_holds_copyright=doaj_record.author_holds_copyright if doaj_record else None,
+            open_access=None,
+            open_access_diamond=None,
+            slug=slugify(sinta_record.title, f"sinta-{sinta_record.profile_id}"),
+            normalized_title=normalize_text(sinta_record.title),
+            normalized_publisher=normalize_text(sinta_record.affiliation or ""),
+            normalized_country=normalize_text("Indonesia"),
+            normalized_url=normalize_text(journal_url or ""),
+        )
+        records.append(record)
+
+    records.sort(
+        key=lambda record: (
+            record.rank is None,
+            record.rank if record.rank is not None else 10**12,
+            record.title,
+        )
+    )
     return records
 
 
@@ -401,6 +658,8 @@ def reset_output_dirs() -> None:
 
 def legacy_redirect_page_html() -> str:
     return """<!doctype html>
+<!-- Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id) -->
+<!-- Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) -->
 <html lang=\"en\">
   <head>
     <meta charset=\"utf-8\">
@@ -591,6 +850,10 @@ def render_index_labels(record: JournalRecord) -> str:
         labels.append('<span class="label label-wos">WoS</span>')
     if record.doaj_indexed:
         labels.append('<span class="label label-doaj">DOAJ</span>')
+    if record.sinta_url or record.accreditation or record.source_type == "sinta":
+        labels.append('<span class="label label-sinta">SINTA</span>')
+    if record.accreditation:
+        labels.append(f'<span class="label label-accreditation">{html.escape(record.accreditation)}</span>')
     if record.sjr_best_quartile:
         labels.append(f'<span class="label label-quartile">{html.escape(record.sjr_best_quartile)}</span>')
     return "".join(labels)
@@ -621,12 +884,14 @@ def home_page_html(summary: SiteSummary) -> str:
     data_url = versioned_path("data/search-manifest.json", summary)
     total_profiles = format(summary.total_journals, ",")
     return f"""<!doctype html>
+<!-- Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id) -->
+<!-- Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) -->
 <html lang=\"en\">
   <head>
     <meta charset=\"utf-8\">
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
     <title>Journal Discovery | Match journal profiles from article abstracts</title>
-    <meta name=\"description\" content=\"Search journal discovery data built from the active Scimago Journal Rank snapshot, with abstract-to-journal matching based on journal titles, categories, and areas.\">
+    <meta name=\"description\" content=\"Search journal discovery data built from Scimago, SINTA, WoS, and optional DOAJ enrichment, with abstract-to-journal matching based on journal titles, categories, areas, and SINTA subject areas.\">
     <meta name=\"robots\" content=\"index,follow\">
     <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
     {maybe_canonical('')}
@@ -653,12 +918,12 @@ def home_page_html(summary: SiteSummary) -> str:
           <div class=\"hero-panel\">
             <div class=\"hero-content\">
               <h1>Find journals by title, keyword, URL fragment, or article abstract.</h1>
-              <p class=\"hero-copy\">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Title</strong>, <strong>Categories</strong>, and <strong>Areas</strong>.</p>
+              <p class=\"hero-copy\">Paste an article abstract and the app will rank journals by how closely it matches each journal's <strong>Title</strong>, <strong>Categories</strong>, <strong>Areas</strong>, and <strong>SINTA Subject Area</strong> when available.</p>
               <form class=\"abstract-search-form\" id=\"search-form\" action=\"./\" method=\"get\">
                 <input type=\"hidden\" id=\"scope\" name=\"scope\" value=\"abstract\">
                 <label class=\"field abstract-field\" for=\"q\">
                   <span>Paste article abstract</span>
-                  <textarea id=\"q\" name=\"q\" rows=\"6\" placeholder=\"Paste an article abstract. The app compares it with journal titles, categories, and subject areas to suggest relevant journals.\"></textarea>
+                  <textarea id=\"q\" name=\"q\" rows=\"6\" placeholder=\"Paste an article abstract. The app compares it with journal titles, categories, areas, and SINTA subject areas to suggest relevant journals.\"></textarea>
                 </label>
                 <div class=\"field hero-sort-field\">
                   <label for=\"sort-order\">Sort results</label>
@@ -683,7 +948,7 @@ def home_page_html(summary: SiteSummary) -> str:
             <div>
               <p class=\"eyebrow results-eyebrow\">SEARCH RESULTS</p>
               <h2>Recommended journals</h2>
-              <p class=\"table-note\">Results appear here only after you submit an abstract or keyword query. Rankings combine literal matching and lightweight NLP over journal titles, categories, and areas.</p>
+              <p class=\"table-note\">Results appear here only after you submit an abstract or keyword query. Rankings combine literal matching and lightweight NLP over journal titles, categories, areas, and SINTA subject areas.</p>
             </div>
             <div class=\"table-chip\" id=\"results-summary\">{total_profiles} journal profiles ready</div>
           </div>
@@ -694,7 +959,7 @@ def home_page_html(summary: SiteSummary) -> str:
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
         <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan[at]unand.ac.id). Available under CC BY-NC.</div>
-        <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
+        <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), SINTA, WoS, and DOAJ.</div>
       </div>
     </footer>
   </body>
@@ -708,12 +973,14 @@ def search_page_html(summary: SiteSummary) -> str:
     data_url = versioned_path("../data/search-manifest.json", summary)
     total_profiles = format(summary.total_journals, ",")
     return f"""<!doctype html>
+<!-- Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id) -->
+<!-- Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) -->
 <html lang=\"en\">
   <head>
     <meta charset=\"utf-8\">
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
     <title>Search Journal Profiles | Journal Discovery</title>
-    <meta name=\"description\" content=\"Search journal profiles by abstract, keyword, full title, publisher, URL fragment, country, indexing status, or best SJR quartile.\">
+    <meta name=\"description\" content=\"Search journal profiles by abstract, keyword, full title, publisher, URL fragment, country, indexing status, accreditation, or best SJR quartile.\">
     <meta name=\"robots\" content=\"index,follow\">
     <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
     {maybe_canonical('search/')}
@@ -740,7 +1007,7 @@ def search_page_html(summary: SiteSummary) -> str:
           <div class=\"hero-panel\">
             <div class=\"hero-content\">
               <h1>Search journal profiles by abstract, keyword, title, publisher, or URL.</h1>
-              <p class=\"hero-copy\">Use abstract matching for recommendations, or switch scope and filters for a more precise search across journal metadata.</p>
+              <p class=\"hero-copy\">Use abstract matching for recommendations, or switch scope and filters for a more precise search across journal metadata, accreditation, and indexing status.</p>
             </div>
           </div>
         </div>
@@ -752,7 +1019,7 @@ def search_page_html(summary: SiteSummary) -> str:
             <div>
               <p class=\"eyebrow results-eyebrow\">ADVANCED SEARCH</p>
               <h2>Search journal profiles</h2>
-              <p class=\"table-note\">Search by abstract, keyword, title, publisher, URL fragment, indexing status, best quartile, or country. Choosing <strong>Highest abstract fit</strong> will switch the scope to abstract matching automatically.</p>
+              <p class=\"table-note\">Search by abstract, keyword, title, publisher, URL fragment, indexing status, accreditation, best quartile, or country. Choosing <strong>Highest abstract fit</strong> will switch the scope to abstract matching automatically.</p>
             </div>
             <div class=\"table-chip\" id=\"results-summary\">{total_profiles} journal profiles ready</div>
           </div>
@@ -780,6 +1047,18 @@ def search_page_html(summary: SiteSummary) -> str:
                     <option value=\"scopus\">Scopus only</option>
                     <option value=\"wos\">WoS only</option>
                     <option value=\"doaj\">DOAJ only</option>
+                  </select>
+                </div>
+                <div class=\"field\">
+                  <label for=\"accreditation-filter\">Accreditation</label>
+                  <select id=\"accreditation-filter\" name=\"accreditation\">
+                    <option value=\"all\">All accreditation levels</option>
+                    <option value=\"S1\">S1</option>
+                    <option value=\"S2\">S2</option>
+                    <option value=\"S3\">S3</option>
+                    <option value=\"S4\">S4</option>
+                    <option value=\"S5\">S5</option>
+                    <option value=\"S6\">S6</option>
                   </select>
                 </div>
                 <div class=\"field\">
@@ -819,7 +1098,7 @@ def search_page_html(summary: SiteSummary) -> str:
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
         <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan[at]unand.ac.id). Available under CC BY-NC.</div>
-        <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
+        <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), SINTA, WoS, and DOAJ.</div>
       </div>
     </footer>
   </body>
@@ -832,15 +1111,17 @@ def profile_page_html(summary: SiteSummary) -> str:
     script_src = versioned_path("../assets/app.js", summary)
     data_url = versioned_path("../data/profile-index.json", summary)
     return f"""<!doctype html>
+<!-- Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id) -->
+<!-- Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) -->
 <html lang=\"en\">
   <head>
     <meta charset=\"utf-8\">
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
     <title>Journal Profile | Journal Discovery</title>
-    <meta name=\"description\" content=\"Journal profile with indexing labels, publisher, country, ISSN, website availability, APC status, license, and SJR best quartile.\">
+    <meta name=\"description\" content=\"Journal profile with indexing labels, accreditation, publisher, country, ISSN, website availability, APC status, license, SINTA metadata, and SJR best quartile.\">
     <meta name=\"robots\" content=\"index,follow\">
     <meta property=\"og:title\" content=\"Journal Profile\">
-    <meta property=\"og:description\" content=\"Journal profile with indexing labels, publisher, country, ISSN, website availability, APC status, license, and SJR best quartile.\">
+    <meta property=\"og:description\" content=\"Journal profile with indexing labels, accreditation, publisher, country, ISSN, website availability, APC status, license, SINTA metadata, and SJR best quartile.\">
     <meta property=\"og:type\" content=\"website\">
     <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
     {maybe_canonical('journal/')}
@@ -868,7 +1149,7 @@ def profile_page_html(summary: SiteSummary) -> str:
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
         <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan[at]unand.ac.id). Available under CC BY-NC.</div>
-        <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), and DOAJ.</div>
+        <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), SINTA, WoS, and DOAJ.</div>
       </div>
     </footer>
   </body>
@@ -897,7 +1178,12 @@ def write_data_json(records: list[JournalRecord], summary: SiteSummary) -> None:
     title_prefix_chunks: dict[str, list[str]] = {}
     search_records = [record.to_search_dict() for record in sorted(
         records,
-        key=lambda record: (record.normalized_title, record.rank, record.title),
+        key=lambda record: (
+            record.normalized_title,
+            record.rank is None,
+            record.rank if record.rank is not None else 10**12,
+            record.title,
+        ),
     )]
     for index in range(0, len(search_records), SEARCH_CHUNK_SIZE):
         chunk_name = f"search-{(index // SEARCH_CHUNK_SIZE) + 1:03d}.json"

@@ -1,3 +1,7 @@
+"""Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id)
+Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
+"""
+
 from __future__ import annotations
 
 import contextlib
@@ -7,6 +11,7 @@ import socketserver
 import sys
 import threading
 import time
+from collections import Counter
 from functools import partial
 from http.server import SimpleHTTPRequestHandler
 from pathlib import Path
@@ -73,6 +78,37 @@ def path_from_url(url: str) -> str:
     return urlparse(url).path.lstrip("/")
 
 
+def normalize_text(value: str) -> str:
+    lowered = (value or "").strip().lower()
+    lowered = re.sub(r"[^a-z0-9]+", " ", lowered)
+    return re.sub(r"\s+", " ", lowered).strip()
+
+
+def load_all_records(manifest: dict[str, object]) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    for relative_path in manifest.get("chunk_paths", []):
+        payload = json.loads((DOCS_DIR / str(relative_path)).read_text(encoding="utf-8"))
+        records.extend(payload.get("records", []))
+    return records
+
+
+def pick_subject_area_candidate(records: list[dict[str, object]]) -> dict[str, object] | None:
+    sinta_records = [record for record in records if record.get("source_type") == "sinta" and record.get("subject_area")]
+    counts = Counter(normalize_text(str(record.get("subject_area") or "")) for record in sinta_records)
+
+    for record in sinta_records:
+        subject_area = normalize_text(str(record.get("subject_area") or ""))
+        if not subject_area:
+            continue
+        if counts[subject_area] != 1:
+            continue
+        if subject_area == normalize_text(str(record.get("title") or "")):
+            continue
+        return record
+
+    return sinta_records[0] if sinta_records else None
+
+
 def wait_for_chunk_set(page, observed_paths: list[str], expected_paths: set[str], timeout_seconds: float = 8.0) -> set[str]:
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
@@ -122,11 +158,14 @@ def main() -> int:
         raise SystemExit("Build output is missing. Run scripts/build_site.py first.")
 
     manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    all_records = load_all_records(manifest)
     first_chunk_path = DOCS_DIR / str((manifest.get("chunk_paths") or [""])[0])
     if not first_chunk_path.exists():
         raise SystemExit("Manifest does not contain a readable first chunk for legacy redirect testing.")
-    first_chunk = json.loads(first_chunk_path.read_text(encoding="utf-8"))
-    first_record = (first_chunk.get("records") or [{}])[0]
+    first_record = next(
+        (record for record in all_records if record.get("source_type") == "scimago"),
+        {},
+    )
     legacy_slug = str(first_record.get("slug") or "")
     legacy_sourceid = str(first_record.get("sourceid") or "")
     legacy_title = str(first_record.get("title") or "")
@@ -135,8 +174,45 @@ def main() -> int:
     prefix_paths = manifest.get("title_prefix_chunks", {})
     expected_a = set(prefix_paths.get("a", []))
     expected_j = set(prefix_paths.get("j", []))
+    merged_indonesia_record = next(
+        (
+            record
+            for record in all_records
+            if record.get("source_type") == "scimago"
+            and record.get("country") == "Indonesia"
+            and record.get("accreditation")
+            and record.get("scopus_indexed") is True
+        ),
+        None,
+    )
+    sinta_only_record = next(
+        (
+            record
+            for record in all_records
+            if record.get("source_type") == "sinta"
+            and record.get("sinta_url")
+            and record.get("subject_area")
+        ),
+        None,
+    )
+    subject_area_candidate = pick_subject_area_candidate(all_records)
+    forbidden_public_keys = {
+        "garuda_indexed",
+        "sinta_impact",
+        "sinta_h5_index",
+        "sinta_citations_5yr",
+        "sinta_citations_total",
+    }
+    if any(forbidden_public_keys & set(record) for record in all_records):
+        raise SystemExit("Generated public search records expose forbidden SINTA metric or Garuda keys.")
     if not expected_all or not expected_a or not expected_j or not legacy_slug or not legacy_sourceid:
         raise SystemExit("Manifest does not contain the expected title-prefix shard mappings.")
+    if not merged_indonesia_record:
+        raise SystemExit("Expected at least one merged Indonesia record with accreditation and Scopus indexing.")
+    if not sinta_only_record:
+        raise SystemExit("Expected at least one SINTA-only record with subject area metadata.")
+    if not subject_area_candidate:
+        raise SystemExit("Expected at least one SINTA-only record suitable for subject-area abstract matching checks.")
 
     with static_server(DOCS_DIR) as base_url, sync_playwright() as playwright:
         browser = playwright.chromium.launch()
@@ -250,14 +326,8 @@ def main() -> int:
         submit_search(metric_page, "cancer", scope="all")
         metric_page.wait_for_selector(".search-card", timeout=20000)
         metric_title = metric_page.locator(".search-card h3 a").first.inner_text().strip()
-        if metric_title != "Ca-A Cancer Journal for Clinicians":
-            raise AssertionError(f"Expected metric-sorted cancer search to start with Ca-A Cancer Journal for Clinicians, got: {metric_title}")
-        first_summary = metric_page.locator(".result-summary").nth(0).inner_text()
-        second_summary = metric_page.locator(".result-summary").nth(1).inner_text()
-        if parse_sjr(first_summary) < parse_sjr(second_summary):
-            raise AssertionError(
-                f"Expected descending SJR order for cancer search, got first two summaries: {first_summary!r} and {second_summary!r}"
-            )
+        if "cancer" not in metric_title.lower():
+            raise AssertionError(f"Expected relevance-first cancer search to start with a cancer-titled journal, got: {metric_title}")
 
         filter_page = browser.new_page()
         filter_requests: list[str] = []
@@ -277,6 +347,20 @@ def main() -> int:
         if "matches found." not in results_count:
             raise AssertionError(f"Expected match count text after deep-linked filter load, got: {results_count}")
 
+        accreditation_page = browser.new_page()
+        accreditation_requests: list[str] = []
+        accreditation_page.on("requestfinished", lambda request: accreditation_requests.append(path_from_url(request.url)))
+        accreditation_page.goto(f"{base_url}/search/?accreditation=S1", wait_until="networkidle")
+        accreditation_page.wait_for_selector("#search-form")
+        wait_for_results(accreditation_page)
+        accreditation_request_set = wait_for_chunk_set(accreditation_page, accreditation_requests, expected_all)
+        if accreditation_request_set != expected_all:
+            raise AssertionError(
+                f"Expected deep-linked S1 accreditation filter to load all shards {sorted(expected_all)}, got {sorted(accreditation_request_set)}"
+            )
+        if accreditation_page.locator("#accreditation-filter").input_value() != "S1":
+            raise AssertionError("Expected accreditation deep link to hydrate the accreditation filter.")
+
         submit_search(
             filter_page,
             "geotechnical geophysics environmental engineering water science",
@@ -286,6 +370,22 @@ def main() -> int:
         first_title = filter_page.locator(".search-card h3 a").first.inner_text()
         if not first_title.strip():
             raise AssertionError("Expected abstract search to render at least one result title.")
+
+        merged_title_page = browser.new_page()
+        merged_title_page.goto(f"{base_url}/search/", wait_until="networkidle")
+        merged_title_page.wait_for_selector("#search-form")
+        submit_search(merged_title_page, str(merged_indonesia_record["title"]), scope="title")
+        merged_title_page.wait_for_selector(".search-card", timeout=20000)
+        merged_result_title = merged_title_page.locator(".search-card h3 a").first.inner_text().strip()
+        if merged_result_title != str(merged_indonesia_record["title"]):
+            raise AssertionError(
+                f"Expected merged Indonesia title search to start with {merged_indonesia_record['title']}, got: {merged_result_title}"
+            )
+        badge_text = merged_title_page.locator(".search-card .label-row").first.inner_text()
+        if str(merged_indonesia_record["accreditation"]) not in badge_text:
+            raise AssertionError(
+                f"Expected merged Indonesia search result to show accreditation badge {merged_indonesia_record['accreditation']}, got: {badge_text!r}"
+            )
 
         sort_switch_page = browser.new_page()
         sort_switch_page.goto(f"{base_url}/search/", wait_until="networkidle")
@@ -339,6 +439,41 @@ def main() -> int:
         if not profile_heading.strip() or profile_heading == "Journal Profile":
             raise AssertionError(f"Expected resolved journal profile title, got: {profile_heading}")
 
+        merged_profile_page = browser.new_page()
+        merged_profile_page.goto(
+            f"{base_url}/journal/?sourceid={merged_indonesia_record['sourceid']}",
+            wait_until="networkidle",
+        )
+        merged_profile_page.wait_for_selector("h1", timeout=20000)
+        merged_profile_text = merged_profile_page.locator("#profile-root").inner_text()
+        if f"Accredited at {merged_indonesia_record['accreditation']}" not in merged_profile_text:
+            raise AssertionError("Expected merged Indonesia profile to render the accreditation/index highlight.")
+        if "Indexed in Scopus" not in merged_profile_text:
+            raise AssertionError("Expected merged Indonesia profile highlight to mention Scopus indexing.")
+
+        sinta_profile_page = browser.new_page()
+        sinta_profile_page.goto(
+            f"{base_url}/journal/?sourceid={sinta_only_record['sourceid']}",
+            wait_until="networkidle",
+        )
+        sinta_profile_page.wait_for_selector("h1", timeout=20000)
+        sinta_profile_text = sinta_profile_page.locator("#profile-root").inner_text()
+        if str(sinta_only_record["sourceid"]) not in sinta_profile_text or str(sinta_only_record["subject_area"]) not in sinta_profile_text:
+            raise AssertionError("Expected SINTA-only profile to render non-metric SINTA details.")
+        for forbidden_label in ("Garuda", "H5-index", "Citations 5yr", "Citations", "Impact"):
+            if forbidden_label in sinta_profile_text:
+                raise AssertionError(f"Expected SINTA-only profile to hide forbidden metric label: {forbidden_label}")
+
+        subject_area_page = browser.new_page()
+        subject_area_page.goto(f"{base_url}/search/", wait_until="networkidle")
+        subject_area_page.wait_for_selector("#search-form")
+        submit_search(subject_area_page, str(subject_area_candidate["subject_area"]), scope="abstract", sort="fit_desc")
+        subject_titles = [text.strip() for text in subject_area_page.locator(".search-card h3 a").all_inner_texts()]
+        if str(subject_area_candidate["title"]).strip() not in subject_titles:
+            raise AssertionError(
+                "Expected abstract matching over SINTA subject area to surface the selected SINTA-only journal on the first page."
+            )
+
         legacy_page = browser.new_page()
         legacy_page.goto(f"{base_url}/journals/{legacy_slug}/", wait_until="networkidle")
         legacy_page.wait_for_url(f"**/journal/?sourceid={legacy_sourceid}", timeout=20000)
@@ -351,7 +486,7 @@ def main() -> int:
         browser.close()
 
     print(
-        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, the homepage exposed abstract-fit sorting, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, metric-based sorting ordered cancer results by descending SJR, deep-linked filters loaded the full dataset, abstract matching rendered insight UI, advanced search auto-switched to abstract scope when fit sorting was selected, long abstract top matches exceeded 2% fit labels and respected descending fit sorting after re-sorting, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
+        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, the homepage exposed abstract-fit sorting, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, relevance-first keyword ranking surfaced a cancer-titled journal, deep-linked index and accreditation filters loaded the full dataset, merged Indonesia results showed accreditation badges, abstract matching rendered insight UI, advanced search auto-switched to abstract scope when fit sorting was selected, long abstract top matches exceeded 2% fit labels and respected descending fit sorting after re-sorting, merged Indonesia and SINTA-only profiles rendered the expected non-metric status details, SINTA subject area influenced abstract matching, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
     )
     print(f"Prefix 'a' shards: {sorted(expected_a)}")
     print(f"Prefix 'j' shards: {sorted(expected_j)}")

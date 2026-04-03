@@ -1,3 +1,7 @@
+"""Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id)
+Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
+"""
+
 from __future__ import annotations
 
 import json
@@ -19,8 +23,29 @@ MANIFEST_PATH = DOCS_DIR / "data" / "search-manifest.json"
 PROFILE_INDEX_PATH = DOCS_DIR / "data" / "profile-index.json"
 LEGACY_REDIRECT_PATH = DOCS_DIR / "404.html"
 
-REQUIRED_SEARCH_KEYS = {"sourceid", "title", "slug", "categories", "areas"}
+REQUIRED_SEARCH_KEYS = {
+    "sourceid",
+    "source_type",
+    "title",
+    "slug",
+    "categories",
+    "areas",
+    "subject_area",
+    "accreditation",
+    "affiliation",
+    "sinta_url",
+    "scopus_indexed",
+}
 REQUIRED_HOME_UI_KEYS = {"eyebrow", "title", "description"}
+VALID_SOURCE_TYPES = {"scimago", "sinta"}
+VALID_ACCREDITATIONS = {"S1", "S2", "S3", "S4", "S5", "S6"}
+FORBIDDEN_SEARCH_KEYS = {
+    "garuda_indexed",
+    "sinta_impact",
+    "sinta_h5_index",
+    "sinta_citations_5yr",
+    "sinta_citations_total",
+}
 
 
 def load_json(path: Path) -> dict[str, object]:
@@ -33,6 +58,31 @@ def ensure_keys(record: dict[str, object], required_keys: set[str], label: str) 
     missing = sorted(key for key in required_keys if key not in record)
     if missing:
         raise SystemExit(f"{label} record is missing required keys: {missing}")
+
+
+def validate_search_record(record: dict[str, object], label: str) -> None:
+    ensure_keys(record, REQUIRED_SEARCH_KEYS, label)
+
+    source_type = str(record.get("source_type") or "")
+    if source_type not in VALID_SOURCE_TYPES:
+        raise SystemExit(f"{label} record has invalid source_type: {source_type!r}")
+
+    sourceid = str(record.get("sourceid") or "")
+    if source_type == "sinta" and not sourceid.startswith("sinta-"):
+        raise SystemExit(f"{label} SINTA record must use sourceid starting with 'sinta-': {sourceid!r}")
+    if source_type == "scimago" and sourceid.startswith("sinta-"):
+        raise SystemExit(f"{label} Scimago record uses an unexpected SINTA-style sourceid: {sourceid!r}")
+
+    if not isinstance(record.get("scopus_indexed"), bool):
+        raise SystemExit(f"{label} record must expose scopus_indexed as a boolean.")
+
+    accreditation = record.get("accreditation")
+    if accreditation is not None and str(accreditation) not in VALID_ACCREDITATIONS:
+        raise SystemExit(f"{label} record has invalid accreditation value: {accreditation!r}")
+
+    forbidden_keys = sorted(key for key in FORBIDDEN_SEARCH_KEYS if key in record)
+    if forbidden_keys:
+        raise SystemExit(f"{label} record exposes forbidden keys: {forbidden_keys}")
 
 
 def record_key(record: dict[str, object]) -> tuple[str, str]:
@@ -89,11 +139,11 @@ def main() -> int:
         records = payload.get("records") or []
         if not isinstance(records, list) or not records:
             raise SystemExit(f"Chunk {relative_path} does not contain any records.")
-        ensure_keys(records[0], REQUIRED_SEARCH_KEYS, relative_path)
         records_by_chunk[str(relative_path)] = records
         search_records.extend(records)
 
-        for record in records:
+        for index, record in enumerate(records, start=1):
+            validate_search_record(record, f"{relative_path} record #{index}")
             key = record_key(record)
             if not all(key):
                 raise SystemExit(f"Chunk {relative_path} contains a record without sourceid or slug.")
