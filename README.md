@@ -21,6 +21,14 @@ Journal Discovery is a static journal discovery website designed for public host
 - Uses SINTA only for non-metric metadata such as accreditation, subject area, affiliation, and profile links. SINTA numeric metrics and Garuda flags are intentionally not exposed to users.
 - Fills journal website, APC status, license, and copyright fields from DOAJ when a journal matches by ISSN or unique exact title.
 
+## SINTA data at a glance
+
+- `data/raw/sinta.csv` is now a required build input.
+- The build tries to merge SINTA rows into existing Scimago journal records by exact ISSN first, then by unique exact normalized title.
+- SINTA rows that do not match Scimago are still published as standalone journal records with runtime IDs in the form `sinta-<profile_id>`.
+- User-facing SINTA fields are limited to non-metric metadata: accreditation, subject area, affiliation, SINTA profile link, and SINTA-backed website fallback.
+- SINTA numeric metrics and Garuda flags are intentionally excluded from public search payloads and UI to avoid mixed quality signals.
+
 ## Profile page model
 
 - Journal detail pages are no longer generated as one folder per journal under `docs/journals/`.
@@ -41,7 +49,7 @@ Journal Discovery is a static journal discovery website designed for public host
 - Scimago data does not include the public journal website URL.
 - Scimago data does not include APC, license, or author copyright information.
 - SINTA data is used only for accreditation and descriptive metadata, not for user-facing numeric quality metrics.
-- Those fields remain `Tidak tersedia` when the current DOAJ snapshot has no matching record.
+- Those fields remain `Not available` when the current DOAJ snapshot has no matching record.
 - Journal website priority is DOAJ first, then SINTA website, then the internal journal profile page when no external website exists in the dataset.
 
 ## Build locally
