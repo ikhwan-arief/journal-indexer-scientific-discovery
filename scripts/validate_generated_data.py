@@ -14,7 +14,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from journal_discovery.build import normalize_text, search_prefix
+from journal_discovery.build import SINTA_CSV, normalize_issns, normalize_text, read_sinta_rows, search_prefix
 
 
 DOCS_DIR = ROOT / "docs"
@@ -85,6 +85,28 @@ def validate_search_record(record: dict[str, object], label: str) -> None:
         raise SystemExit(f"{label} record exposes forbidden keys: {forbidden_keys}")
 
 
+def load_sinta_issn_lookup() -> dict[str, set[str]]:
+    lookup: dict[str, set[str]] = {}
+    for row in read_sinta_rows(SINTA_CSV):
+        sinta_url = str(row.get("Sinta URL") or "").strip()
+        if not sinta_url:
+            continue
+        issns = set(
+            normalize_issns(
+                ",".join(
+                    value
+                    for value in (
+                        row.get("P-ISSN"),
+                        row.get("E-ISSN"),
+                    )
+                    if value
+                )
+            )
+        )
+        lookup[sinta_url] = issns
+    return lookup
+
+
 def record_key(record: dict[str, object]) -> tuple[str, str]:
     return str(record.get("sourceid") or ""), str(record.get("slug") or "")
 
@@ -127,6 +149,8 @@ def main() -> int:
     if not isinstance(sourceid_to_chunk, dict) or not sourceid_to_chunk:
         raise SystemExit("profile-index.json does not contain sourceid_to_chunk.")
 
+    sinta_issns_by_url = load_sinta_issn_lookup()
+
     search_records: list[dict[str, object]] = []
     records_by_chunk: dict[str, list[dict[str, object]]] = {}
     seen_search_keys: set[tuple[str, str]] = set()
@@ -150,6 +174,19 @@ def main() -> int:
             if key in seen_search_keys:
                 raise SystemExit(f"Duplicate search record detected for sourceid/slug pair: {key}")
             seen_search_keys.add(key)
+
+            if record.get("source_type") == "scimago" and record.get("sinta_url"):
+                sinta_url = str(record.get("sinta_url") or "")
+                sinta_issns = sinta_issns_by_url.get(sinta_url)
+                record_issns = {str(value) for value in (record.get("issns") or []) if value}
+                if sinta_issns is None:
+                    raise SystemExit(
+                        f"{relative_path} record #{index} references unknown SINTA URL: {sinta_url}"
+                    )
+                if not record_issns or not sinta_issns or not (record_issns & sinta_issns):
+                    raise SystemExit(
+                        f"{relative_path} record #{index} has SINTA metadata without ISSN overlap for {sinta_url}"
+                    )
 
     if len(search_records) != expected_total:
         raise SystemExit(

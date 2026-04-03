@@ -422,11 +422,8 @@ def match_doaj_record(
     return title_lookup.get(normalize_text(title))
 
 
-def build_unique_source_lookups(
-    rows: Iterable[dict[str, str]],
-) -> tuple[dict[str, str], dict[str, str]]:
+def build_unique_issn_lookup(rows: Iterable[dict[str, str]]) -> dict[str, str]:
     issn_groups: dict[str, list[str]] = {}
-    title_groups: dict[str, list[str]] = {}
 
     for row in rows:
         sourceid = (row.get("Sourceid") or "").strip()
@@ -436,35 +433,24 @@ def build_unique_source_lookups(
 
         for issn in normalize_issns(row.get("Issn") or ""):
             issn_groups.setdefault(issn, []).append(sourceid)
-        title_groups.setdefault(normalize_text(title), []).append(sourceid)
 
-    unique_issn_lookup = {
+    return {
         issn: sourceids[0]
         for issn, sourceids in issn_groups.items()
         if len(sourceids) == 1
     }
-    unique_title_lookup = {
-        normalized_title: sourceids[0]
-        for normalized_title, sourceids in title_groups.items()
-        if len(sourceids) == 1
-    }
-    return unique_issn_lookup, unique_title_lookup
 
 
 def match_scimago_sourceid(
     sinta_record: SintaRecord,
     issn_lookup: dict[str, str],
-    title_lookup: dict[str, str],
 ) -> tuple[str | None, str | None]:
+    # Title-only SINTA merges proved too ambiguous for generic journal names
+    # and could attach Indonesian metadata to unrelated Scimago records.
     for issn in sinta_record.issns:
         sourceid = issn_lookup.get(issn)
         if sourceid:
             return sourceid, "issn"
-
-    if sinta_record.normalized_title:
-        sourceid = title_lookup.get(sinta_record.normalized_title)
-        if sourceid:
-            return sourceid, "title"
 
     return None, None
 
@@ -507,7 +493,7 @@ def build_records() -> list[JournalRecord]:
     wos_sourceids = load_wos_sourceids(WOS_CSV)
     doaj_issn_lookup, doaj_title_lookup = load_doaj_lookups(DOAJ_CSV)
     sinta_records = load_sinta_records(SINTA_CSV)
-    unique_issn_lookup, unique_title_lookup = build_unique_source_lookups(scimago_rows)
+    unique_issn_lookup = build_unique_issn_lookup(scimago_rows)
 
     records: list[JournalRecord] = []
     records_by_sourceid: dict[str, JournalRecord] = {}
@@ -561,7 +547,7 @@ def build_records() -> list[JournalRecord]:
     selected_sinta_by_sourceid: dict[str, tuple[SintaRecord, str | None]] = {}
     unmatched_sinta_records: list[SintaRecord] = []
     for sinta_record in sinta_records:
-        sourceid, match_kind = match_scimago_sourceid(sinta_record, unique_issn_lookup, unique_title_lookup)
+        sourceid, match_kind = match_scimago_sourceid(sinta_record, unique_issn_lookup)
         if not sourceid:
             unmatched_sinta_records.append(sinta_record)
             continue
