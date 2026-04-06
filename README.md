@@ -89,6 +89,8 @@ export LLM_ABSTRACT_MATCH_ENABLED="true"
 python scripts/build_site.py
 ```
 
+When `LLM_API_BASE_URL` points to `localhost` or `127.0.0.1` and `LLM_TIMEOUT_MS` is not set, the build now defaults to `60000` ms to better accommodate local Ollama-style inference.
+
 1. Open `docs/index.html` in a browser for a quick local check.
 
 ## Browser smoke test
@@ -111,6 +113,18 @@ Run locally:
 uvicorn journal_discovery_llm_api.app:app --host 127.0.0.1 --port 8000 --app-dir src
 ```
 
+For local Ollama testing, this baseline has been the most stable on a full `candidate_depth=50` rerank workload:
+
+```bash
+export LLM_PROVIDER_KIND="openai_compatible"
+export LLM_PROVIDER_BASE_URL="http://127.0.0.1:11434/v1"
+export LLM_PROVIDER_API_KEY="ollama"
+export LLM_PROVIDER_MODEL="qwen2.5:1.5b"
+uvicorn journal_discovery_llm_api.app:app --host 127.0.0.1 --port 8000 --app-dir src
+```
+
+When `LLM_PROVIDER_BASE_URL` is local and `LLM_PROVIDER_TIMEOUT_SECONDS` is not set, the API now defaults to `120` seconds instead of `30` seconds.
+
 Container deployment notes for the API are in `deployment/llm_api/README.md`.
 
 ## Local benchmark
@@ -121,7 +135,7 @@ Use `--refs-dir /path/to/refs` when your dissertation PDF folder lives elsewhere
 
 Use `./.venv/bin/python scripts/benchmark_doaj_relevance.py` to run a DOAJ-based relevance benchmark that samples recent article abstracts across several broad domains without storing an API key in the repository. This benchmark reports relevance-oriented metrics such as `Hit@5`, `MRR`, and `nDCG@10`, and keeps exact source-journal retrieval as a secondary signal only.
 
-Add `--llm-rerank-url http://127.0.0.1:8000 --candidate-depth 30` to either benchmark when you want to evaluate the LLM-assisted shortlist reranker through the browser app flow.
+Add `--llm-rerank-url http://127.0.0.1:8000 --candidate-depth 50 --llm-timeout-ms 60000` to either benchmark when you want to evaluate the LLM-assisted shortlist reranker through the browser app flow against a local Ollama server.
 
 Use `./.venv/bin/python scripts/benchmark_sparse_baselines.py --max-rank 30` to compare two fair lexical baselines on the same sparse journal metadata fields:
 

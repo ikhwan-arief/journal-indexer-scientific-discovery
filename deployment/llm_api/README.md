@@ -18,6 +18,8 @@ This service exposes `POST /v1/abstract-match` for Journal Discovery abstract re
 - `LLM_BODY_LIMIT_BYTES=250000`
 - `LLM_API_ENABLE_DOCS=false`
 
+If `LLM_PROVIDER_BASE_URL` points to `localhost` or `127.0.0.1` and `LLM_PROVIDER_TIMEOUT_SECONDS` is not set, the service defaults to `120` seconds to tolerate slower local Ollama inference.
+
 ## Build and run
 
 ```bash
@@ -35,3 +37,5 @@ docker run -d \
 ```
 
 Point the frontend build variable `LLM_API_BASE_URL` to this service root, for example `https://api.example.com`.
+
+For local Ollama testing, `qwen2.5:1.5b` is a good starting point for the full 50-candidate rerank workload.

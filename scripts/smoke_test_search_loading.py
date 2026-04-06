@@ -148,6 +148,31 @@ def configure_llm_runtime(page, llm_url: str, candidate_depth: int = 5, timeout_
     )
 
 
+def disable_llm_runtime(page) -> None:
+    config = json.dumps(
+        {
+            "llmApiBaseUrl": "",
+            "llmTimeoutMs": 5000,
+            "llmAbstractEnabled": False,
+            "llmCandidateLimit": 50,
+        }
+    )
+    page.add_init_script(
+        script=f"""
+            window.__JD_RUNTIME_CONFIG__ = {{
+                ...(window.__JD_RUNTIME_CONFIG__ || {{}}),
+                ...{config}
+            }};
+        """
+    )
+
+
+def new_smoke_page(browser):
+    page = browser.new_page()
+    disable_llm_runtime(page)
+    return page
+
+
 def fulfill_mock_llm_route(route, recorded_requests: list[dict[str, object]], mode: str) -> None:
     payload = json.loads(route.request.post_data or "{}")
     recorded_requests.append(
@@ -281,7 +306,7 @@ def main() -> int:
     with static_server(DOCS_DIR) as base_url, sync_playwright() as playwright:
         browser = playwright.chromium.launch()
 
-        home_page = browser.new_page()
+        home_page = new_smoke_page(browser)
         home_requests: list[str] = []
         home_page.on("requestfinished", lambda request: home_requests.append(path_from_url(request.url)))
 
@@ -317,7 +342,7 @@ def main() -> int:
         if home_page.locator(".search-card").count() == 0:
             raise AssertionError("Expected homepage search to render at least one result card.")
 
-        stopword_page = browser.new_page()
+        stopword_page = new_smoke_page(browser)
         stopword_requests: list[str] = []
         stopword_page.on("requestfinished", lambda request: stopword_requests.append(path_from_url(request.url)))
 
@@ -338,7 +363,7 @@ def main() -> int:
                 f"Expected stop-word-only homepage query to avoid shard requests, got: {sorted(stopword_chunks)}"
             )
 
-        title_page = browser.new_page()
+        title_page = new_smoke_page(browser)
         title_requests: list[str] = []
 
         title_page.on("requestfinished", lambda request: title_requests.append(path_from_url(request.url)))
@@ -384,7 +409,7 @@ def main() -> int:
                 f"Expected only prefix 'j' shards {sorted(expected_j)} on second search, got {sorted(new_requests)}"
             )
 
-        metric_page = browser.new_page()
+        metric_page = new_smoke_page(browser)
         metric_page.goto(f"{base_url}/search/", wait_until="networkidle")
         metric_page.wait_for_selector("#search-form")
         submit_search(metric_page, "cancer", scope="all")
@@ -393,7 +418,7 @@ def main() -> int:
         if "cancer" not in metric_title.lower():
             raise AssertionError(f"Expected relevance-first cancer search to start with a cancer-titled journal, got: {metric_title}")
 
-        filter_page = browser.new_page()
+        filter_page = new_smoke_page(browser)
         filter_requests: list[str] = []
 
         filter_page.on("requestfinished", lambda request: filter_requests.append(path_from_url(request.url)))
@@ -411,7 +436,7 @@ def main() -> int:
         if "matches found." not in results_count:
             raise AssertionError(f"Expected match count text after deep-linked filter load, got: {results_count}")
 
-        accreditation_page = browser.new_page()
+        accreditation_page = new_smoke_page(browser)
         accreditation_requests: list[str] = []
         accreditation_page.on("requestfinished", lambda request: accreditation_requests.append(path_from_url(request.url)))
         accreditation_page.goto(f"{base_url}/search/?accreditation=S1", wait_until="networkidle")
@@ -435,7 +460,7 @@ def main() -> int:
         if not first_title.strip():
             raise AssertionError("Expected abstract search to render at least one result title.")
 
-        long_lexical_page = browser.new_page()
+        long_lexical_page = new_smoke_page(browser)
         long_lexical_page.goto(f"{base_url}/search/", wait_until="networkidle")
         long_lexical_page.wait_for_selector("#search-form")
         submit_search(long_lexical_page, LONG_ABSTRACT_FIT_QUERY, scope="abstract")
@@ -443,7 +468,7 @@ def main() -> int:
         if not long_lexical_first_title:
             raise AssertionError("Expected long abstract lexical search to render a first result.")
 
-        llm_success_page = browser.new_page()
+        llm_success_page = new_smoke_page(browser)
         llm_success_requests: list[dict[str, object]] = []
         configure_llm_runtime(llm_success_page, base_url, candidate_depth=5)
         llm_success_page.route("**/v1/abstract-match", lambda route: fulfill_mock_llm_route(route, llm_success_requests, "success"))
@@ -466,7 +491,7 @@ def main() -> int:
         if llm_first_title == long_lexical_first_title:
             raise AssertionError("Expected successful LLM rerank to reorder the first result relative to lexical ranking.")
 
-        llm_fallback_page = browser.new_page()
+        llm_fallback_page = new_smoke_page(browser)
         llm_error_requests: list[dict[str, object]] = []
         configure_llm_runtime(llm_fallback_page, base_url, candidate_depth=5)
         llm_fallback_page.route("**/v1/abstract-match", lambda route: fulfill_mock_llm_route(route, llm_error_requests, "error"))
@@ -488,7 +513,7 @@ def main() -> int:
         if not llm_error_requests:
             raise AssertionError("Expected failing LLM rerank page to still attempt the mock API request.")
 
-        short_query_page = browser.new_page()
+        short_query_page = new_smoke_page(browser)
         configure_llm_runtime(short_query_page, base_url, candidate_depth=5)
         short_query_page.route("**/v1/abstract-match", lambda route: fulfill_mock_llm_route(route, llm_success_requests, "success"))
         short_query_page.goto(f"{base_url}/search/", wait_until="networkidle")
@@ -501,7 +526,7 @@ def main() -> int:
         if len(llm_success_requests) != before_short_requests:
             raise AssertionError("Expected short abstract queries to skip the LLM API.")
 
-        merged_title_page = browser.new_page()
+        merged_title_page = new_smoke_page(browser)
         merged_title_page.goto(f"{base_url}/search/", wait_until="networkidle")
         merged_title_page.wait_for_selector("#search-form")
         submit_search(merged_title_page, str(merged_indonesia_record["title"]), scope="title")
@@ -517,7 +542,7 @@ def main() -> int:
                 f"Expected merged Indonesia search result to show accreditation badge {merged_indonesia_record['accreditation']}, got: {badge_text!r}"
             )
 
-        sort_switch_page = browser.new_page()
+        sort_switch_page = new_smoke_page(browser)
         sort_switch_page.goto(f"{base_url}/search/", wait_until="networkidle")
         sort_switch_page.wait_for_selector("#search-form")
         sort_switch_page.select_option("#sort-order", "fit_desc")
@@ -530,7 +555,7 @@ def main() -> int:
             timeout=10000,
         )
 
-        long_fit_page = browser.new_page()
+        long_fit_page = new_smoke_page(browser)
         long_fit_page.goto(f"{base_url}/search/", wait_until="networkidle")
         long_fit_page.wait_for_selector("#search-form")
         submit_search(long_fit_page, LONG_ABSTRACT_FIT_QUERY, scope="abstract")
@@ -562,14 +587,14 @@ def main() -> int:
         if not profile_href or "journal/?sourceid=" not in profile_href:
             raise AssertionError(f"Expected dynamic journal profile link, got: {profile_href}")
 
-        profile_page = browser.new_page()
+        profile_page = new_smoke_page(browser)
         profile_page.goto(urljoin(f"{base_url}/search/", profile_href), wait_until="networkidle")
         profile_page.wait_for_selector("h1", timeout=20000)
         profile_heading = profile_page.locator("h1").inner_text()
         if not profile_heading.strip() or profile_heading == "Journal Profile":
             raise AssertionError(f"Expected resolved journal profile title, got: {profile_heading}")
 
-        merged_profile_page = browser.new_page()
+        merged_profile_page = new_smoke_page(browser)
         merged_profile_page.goto(
             f"{base_url}/journal/?sourceid={merged_indonesia_record['sourceid']}",
             wait_until="networkidle",
@@ -581,7 +606,7 @@ def main() -> int:
         if "Indexed in Scopus" not in merged_profile_text:
             raise AssertionError("Expected merged Indonesia profile highlight to mention Scopus indexing.")
 
-        sinta_profile_page = browser.new_page()
+        sinta_profile_page = new_smoke_page(browser)
         sinta_profile_page.goto(
             f"{base_url}/journal/?sourceid={sinta_only_record['sourceid']}",
             wait_until="networkidle",
@@ -594,7 +619,7 @@ def main() -> int:
             if forbidden_label in sinta_profile_text:
                 raise AssertionError(f"Expected SINTA-only profile to hide forbidden metric label: {forbidden_label}")
 
-        subject_area_page = browser.new_page()
+        subject_area_page = new_smoke_page(browser)
         subject_area_page.goto(f"{base_url}/search/", wait_until="networkidle")
         subject_area_page.wait_for_selector("#search-form")
         submit_search(subject_area_page, str(subject_area_candidate["subject_area"]), scope="abstract", sort="fit_desc")
@@ -604,7 +629,7 @@ def main() -> int:
                 "Expected abstract matching over SINTA subject area to surface the selected SINTA-only journal on the first page."
             )
 
-        legacy_page = browser.new_page()
+        legacy_page = new_smoke_page(browser)
         legacy_page.goto(f"{base_url}/journals/{legacy_slug}/", wait_until="networkidle")
         legacy_page.wait_for_url(f"**/journal/?sourceid={legacy_sourceid}", timeout=20000)
         legacy_heading = legacy_page.locator("h1").inner_text()

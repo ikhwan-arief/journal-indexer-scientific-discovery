@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import csv
 import html
+import ipaddress
 import json
 import os
 import re
@@ -833,6 +834,21 @@ def llm_api_base_url() -> str:
     return safe_url(os.getenv("LLM_API_BASE_URL")) or ""
 
 
+def is_local_service_url(raw_url: str | None) -> bool:
+    if not raw_url:
+        return False
+    parsed = urlparse(raw_url)
+    hostname = (parsed.hostname or "").strip().lower()
+    if not hostname:
+        return False
+    if hostname == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(hostname).is_loopback
+    except ValueError:
+        return False
+
+
 def llm_abstract_enabled() -> bool:
     api_url = llm_api_base_url()
     if not api_url:
@@ -844,14 +860,15 @@ def llm_abstract_enabled() -> bool:
 
 
 def llm_timeout_ms() -> int:
+    default_timeout_ms = 60000 if is_local_service_url(llm_api_base_url()) else 8000
     raw_value = (os.getenv("LLM_TIMEOUT_MS") or "").strip()
     if not raw_value:
-        return 8000
+        return default_timeout_ms
     try:
         value = int(raw_value)
     except ValueError:
-        return 8000
-    return max(1000, min(60000, value))
+        return default_timeout_ms
+    return max(1000, min(120000, value))
 
 
 def llm_candidate_limit() -> int:

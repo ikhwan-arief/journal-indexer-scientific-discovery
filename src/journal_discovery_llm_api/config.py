@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from ipaddress import ip_address
+from urllib.parse import urlparse
 
 
 DEFAULT_ALLOW_ORIGIN_REGEX = r"(^https://[A-Za-z0-9-]+\.github\.io$)|(^https?://(localhost|127\.0\.0\.1)(:\d+)?$)"
@@ -48,6 +50,21 @@ def parse_origins(raw_value: str | None) -> tuple[str, ...]:
     return tuple(dict.fromkeys(values))
 
 
+def is_local_service_url(raw_value: str | None) -> bool:
+    if not raw_value:
+        return False
+    parsed = urlparse(raw_value)
+    hostname = (parsed.hostname or "").strip().lower()
+    if not hostname:
+        return False
+    if hostname == "localhost":
+        return True
+    try:
+        return ip_address(hostname).is_loopback
+    except ValueError:
+        return False
+
+
 @dataclass(frozen=True, slots=True)
 class ApiSettings:
     provider_kind: str
@@ -78,12 +95,14 @@ class ApiSettings:
 
 @lru_cache(maxsize=1)
 def get_settings() -> ApiSettings:
+    provider_base_url = (os.getenv("LLM_PROVIDER_BASE_URL") or "").strip().rstrip("/")
+    default_provider_timeout = 120.0 if is_local_service_url(provider_base_url) else 30.0
     return ApiSettings(
         provider_kind=(os.getenv("LLM_PROVIDER_KIND") or "openai_compatible").strip().lower(),
-        provider_base_url=(os.getenv("LLM_PROVIDER_BASE_URL") or "").strip().rstrip("/"),
+        provider_base_url=provider_base_url,
         provider_api_key=(os.getenv("LLM_PROVIDER_API_KEY") or "").strip(),
         provider_model=(os.getenv("LLM_PROVIDER_MODEL") or "").strip(),
-        provider_timeout_seconds=max(1.0, env_float("LLM_PROVIDER_TIMEOUT_SECONDS", 30.0)),
+        provider_timeout_seconds=max(1.0, env_float("LLM_PROVIDER_TIMEOUT_SECONDS", default_provider_timeout)),
         batch_size=max(1, min(10, env_int("LLM_BATCH_SIZE", 10))),
         max_candidates=max(1, min(50, env_int("LLM_MAX_CANDIDATES", 50))),
         default_top_n=max(1, min(50, env_int("LLM_DEFAULT_TOP_N", 50))),
@@ -100,4 +119,3 @@ def get_settings() -> ApiSettings:
         allow_origin_regex=(os.getenv("LLM_CORS_ALLOW_ORIGIN_REGEX") or DEFAULT_ALLOW_ORIGIN_REGEX).strip(),
         enable_docs=env_bool("LLM_API_ENABLE_DOCS", False),
     )
-
