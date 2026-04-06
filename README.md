@@ -13,6 +13,7 @@ Journal Discovery is a static journal discovery website designed for public host
 - Writes a lightweight `docs/data/home.json` for homepage metadata plus a `docs/data/search-manifest.json`, `docs/data/profile-index.json`, and sharded `docs/data/search-chunks/` files for on-demand search and profile loading, with title-prefix shard hints so title searches can fetch fewer chunks first.
 - Uses a search-first homepage: the result area stays empty on first load and only shows journal cards after a user submits a query.
 - Provides a large abstract input on the front page so users can paste an article abstract and search for matching journals inline.
+- Can optionally rerank abstract-search shortlists through an external LLM API while keeping the current client-side lexical scorer as the first-stage retriever and fallback path.
 - Shows the `SJR Best Quartile` on a single runtime-loaded journal profile page keyed by stable `sourceid` values.
 - Exposes a search page for abstract, keyword, title, URL fragment, country, index filter, accreditation filter, quartile filter, and abstract-fit result sorting.
 - Applies lightweight NLP preprocessing to abstract and keyword search: normalization, tokenization, stop-word removal (English + Indonesian), and conservative stemming.
@@ -79,11 +80,38 @@ curl -L https://doaj.org/csv -o "data/raw/doaj.csv"
 python scripts/build_site.py
 ```
 
+To emit frontend config for the optional LLM rerank API, set these environment variables before the build when needed:
+
+```bash
+export LLM_API_BASE_URL="https://api.example.com"
+export LLM_TIMEOUT_MS="8000"
+export LLM_ABSTRACT_MATCH_ENABLED="true"
+python scripts/build_site.py
+```
+
 1. Open `docs/index.html` in a browser for a quick local check.
 
 ## Browser smoke test
 
-Use the smoke test to verify that the homepage stays idle on first load, homepage search renders results only after submit, stop-word-only homepage queries stay idle, the advanced search page stays idle on first load, scope-only changes do not trigger shard loading, title-scoped queries only fetch the expected shard files, deep-linked index and accreditation filters load correctly, merged Indonesia records show accreditation badges, SINTA-only profiles resolve correctly, and abstract searches render match insight cards.
+Use the smoke test to verify that the homepage stays idle on first load, homepage search renders results only after submit, stop-word-only homepage queries stay idle, the advanced search page stays idle on first load, scope-only changes do not trigger shard loading, title-scoped queries only fetch the expected shard files, deep-linked index and accreditation filters load correctly, merged Indonesia records show accreditation badges, SINTA-only profiles resolve correctly, abstract searches render match insight cards, and the optional LLM rerank path succeeds, falls back cleanly, and skips short abstracts.
+
+## Optional LLM API
+
+The external rerank service lives under `src/journal_discovery_llm_api/` and exposes `POST /v1/abstract-match`.
+
+Install its runtime dependencies:
+
+```bash
+python -m pip install -r requirements-api.txt
+```
+
+Run locally:
+
+```bash
+uvicorn journal_discovery_llm_api.app:app --host 127.0.0.1 --port 8000 --app-dir src
+```
+
+Container deployment notes for the API are in `deployment/llm_api/README.md`.
 
 ## Local benchmark
 
@@ -93,12 +121,14 @@ Use `--refs-dir /path/to/refs` when your dissertation PDF folder lives elsewhere
 
 Use `./.venv/bin/python scripts/benchmark_doaj_relevance.py` to run a DOAJ-based relevance benchmark that samples recent article abstracts across several broad domains without storing an API key in the repository. This benchmark reports relevance-oriented metrics such as `Hit@5`, `MRR`, and `nDCG@10`, and keeps exact source-journal retrieval as a secondary signal only.
 
+Add `--llm-rerank-url http://127.0.0.1:8000 --candidate-depth 30` to either benchmark when you want to evaluate the LLM-assisted shortlist reranker through the browser app flow.
+
 Use `./.venv/bin/python scripts/benchmark_sparse_baselines.py --max-rank 30` to compare two fair lexical baselines on the same sparse journal metadata fields:
 
 - `BM25F` over `Title`, `Categories`, and `Areas`
 - `TF-IDF` cosine over the same fields
 
-Use `./.venv/bin/python scripts/export_manual_relevance_template.py --output paper/manual_relevance_benchmark_template.csv` to export a manual-label template that merges candidate journals proposed by the current app, `BM25F`, and `TF-IDF`. The rubric for turning that CSV into a graded-relevance benchmark is documented in `paper/manual_relevance_protocol.md`.
+Use `./.venv/bin/python scripts/export_manual_relevance_template.py --output paper/manual_relevance_benchmark_template.csv` to export a manual-label template that merges candidate journals proposed by the current app, the optional LLM-assisted app ranking, `BM25F`, and `TF-IDF`. The rubric for turning that CSV into a graded-relevance benchmark is documented in `paper/manual_relevance_protocol.md`.
 
 ## Generated data validation
 

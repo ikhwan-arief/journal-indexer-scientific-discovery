@@ -129,6 +129,70 @@ def wait_for_results(page) -> None:
     )
 
 
+def configure_llm_runtime(page, llm_url: str, candidate_depth: int = 5, timeout_ms: int = 5000) -> None:
+    config = json.dumps(
+        {
+            "llmApiBaseUrl": llm_url,
+            "llmTimeoutMs": timeout_ms,
+            "llmAbstractEnabled": True,
+            "llmCandidateLimit": candidate_depth,
+        }
+    )
+    page.add_init_script(
+        script=f"""
+            window.__JD_RUNTIME_CONFIG__ = {{
+                ...(window.__JD_RUNTIME_CONFIG__ || {{}}),
+                ...{config}
+            }};
+        """
+    )
+
+
+def fulfill_mock_llm_route(route, recorded_requests: list[dict[str, object]], mode: str) -> None:
+    payload = json.loads(route.request.post_data or "{}")
+    recorded_requests.append(
+        {
+            "path": urlparse(route.request.url).path,
+            "payload": payload,
+        }
+    )
+
+    if mode == "error":
+        route.fulfill(
+            status=503,
+            content_type="application/json",
+            body=json.dumps({"detail": "Mock LLM failure."}),
+        )
+        return
+
+    candidates = list(payload.get("candidates", []))
+    ranked = []
+    for index, candidate in enumerate(reversed(candidates), start=1):
+        ranked.append(
+            {
+                "sourceid": str(candidate.get("sourceid") or ""),
+                "rank": index,
+                "llm_score": max(0, 100 - index),
+                "rationale": f"{candidate.get('title') or 'This journal'} aligns with the abstract scope.",
+                "matched_fields": ["title", "areas"],
+                "confidence": 0.84,
+            }
+        )
+
+    route.fulfill(
+        status=200,
+        content_type="application/json",
+        body=json.dumps(
+            {
+                "mode": "llm_assisted",
+                "model": "mock-llm",
+                "latency_ms": 12,
+                "ranked": ranked,
+            }
+        ),
+    )
+
+
 def submit_search(page, query: str, scope: str | None = None, sort: str | None = None) -> None:
     if scope is not None:
         page.select_option("#scope", scope)
@@ -371,6 +435,72 @@ def main() -> int:
         if not first_title.strip():
             raise AssertionError("Expected abstract search to render at least one result title.")
 
+        long_lexical_page = browser.new_page()
+        long_lexical_page.goto(f"{base_url}/search/", wait_until="networkidle")
+        long_lexical_page.wait_for_selector("#search-form")
+        submit_search(long_lexical_page, LONG_ABSTRACT_FIT_QUERY, scope="abstract")
+        long_lexical_first_title = long_lexical_page.locator(".search-card h3 a").first.inner_text().strip()
+        if not long_lexical_first_title:
+            raise AssertionError("Expected long abstract lexical search to render a first result.")
+
+        llm_success_page = browser.new_page()
+        llm_success_requests: list[dict[str, object]] = []
+        configure_llm_runtime(llm_success_page, base_url, candidate_depth=5)
+        llm_success_page.route("**/v1/abstract-match", lambda route: fulfill_mock_llm_route(route, llm_success_requests, "success"))
+        llm_success_page.goto(f"{base_url}/search/", wait_until="networkidle")
+        llm_success_page.wait_for_selector("#search-form")
+        if llm_success_page.locator("#llm-privacy-note").count() != 1 or llm_success_page.locator("#llm-privacy-note").is_hidden():
+            raise AssertionError("Expected LLM-enabled runtime config to reveal the privacy note.")
+        submit_search(
+            llm_success_page,
+            LONG_ABSTRACT_FIT_QUERY,
+            scope="abstract",
+        )
+        llm_success_page.wait_for_selector(".llm-insight", timeout=20000)
+        llm_status_text = llm_success_page.locator("#ranking-status").inner_text()
+        if "LLM-assisted ranking" not in llm_status_text:
+            raise AssertionError(f"Expected LLM success status, got: {llm_status_text}")
+        llm_first_title = llm_success_page.locator(".search-card h3 a").first.inner_text().strip()
+        if not llm_success_requests:
+            raise AssertionError("Expected successful LLM rerank page to call the mock API.")
+        if llm_first_title == long_lexical_first_title:
+            raise AssertionError("Expected successful LLM rerank to reorder the first result relative to lexical ranking.")
+
+        llm_fallback_page = browser.new_page()
+        llm_error_requests: list[dict[str, object]] = []
+        configure_llm_runtime(llm_fallback_page, base_url, candidate_depth=5)
+        llm_fallback_page.route("**/v1/abstract-match", lambda route: fulfill_mock_llm_route(route, llm_error_requests, "error"))
+        llm_fallback_page.goto(f"{base_url}/search/", wait_until="networkidle")
+        llm_fallback_page.wait_for_selector("#search-form")
+        submit_search(
+            llm_fallback_page,
+            LONG_ABSTRACT_FIT_QUERY,
+            scope="abstract",
+        )
+        fallback_status_text = llm_fallback_page.locator("#ranking-status").inner_text()
+        if "Lexical fallback" not in fallback_status_text:
+            raise AssertionError(f"Expected lexical fallback status when the LLM API fails, got: {fallback_status_text}")
+        if llm_fallback_page.locator(".llm-insight").count() != 0:
+            raise AssertionError("Expected no LLM rationale cards when fallback ranking is used.")
+        fallback_first_title = llm_fallback_page.locator(".search-card h3 a").first.inner_text().strip()
+        if fallback_first_title != long_lexical_first_title:
+            raise AssertionError("Expected fallback ranking to preserve the lexical first result.")
+        if not llm_error_requests:
+            raise AssertionError("Expected failing LLM rerank page to still attempt the mock API request.")
+
+        short_query_page = browser.new_page()
+        configure_llm_runtime(short_query_page, base_url, candidate_depth=5)
+        short_query_page.route("**/v1/abstract-match", lambda route: fulfill_mock_llm_route(route, llm_success_requests, "success"))
+        short_query_page.goto(f"{base_url}/search/", wait_until="networkidle")
+        short_query_page.wait_for_selector("#search-form")
+        before_short_requests = len(llm_success_requests)
+        submit_search(short_query_page, "machine learning water", scope="abstract")
+        short_status_text = short_query_page.locator("#ranking-status").inner_text()
+        if "Lexical fallback" not in short_status_text:
+            raise AssertionError(f"Expected lexical fallback status for short abstract queries, got: {short_status_text}")
+        if len(llm_success_requests) != before_short_requests:
+            raise AssertionError("Expected short abstract queries to skip the LLM API.")
+
         merged_title_page = browser.new_page()
         merged_title_page.goto(f"{base_url}/search/", wait_until="networkidle")
         merged_title_page.wait_for_selector("#search-form")
@@ -486,7 +616,7 @@ def main() -> int:
         browser.close()
 
     print(
-        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, the homepage exposed abstract-fit sorting, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, relevance-first keyword ranking surfaced a cancer-titled journal, deep-linked index and accreditation filters loaded the full dataset, merged Indonesia results showed accreditation badges, abstract matching rendered insight UI, advanced search auto-switched to abstract scope when fit sorting was selected, long abstract top matches exceeded 2% fit labels and respected descending fit sorting after re-sorting, merged Indonesia and SINTA-only profiles rendered the expected non-metric status details, SINTA subject area influenced abstract matching, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
+        "Smoke test passed: homepage stayed search-first on idle load, homepage abstract search rendered results, the homepage exposed abstract-fit sorting, stop-word-only homepage queries avoided shard loads, scope-only changes on the advanced search page avoided shard loads, title searches fetched only the expected shards, relevance-first keyword ranking surfaced a cancer-titled journal, deep-linked index and accreditation filters loaded the full dataset, merged Indonesia results showed accreditation badges, abstract matching rendered insight UI, successful LLM reranking changed the first result and showed rationale/status UI, failed LLM reranking fell back cleanly to lexical ranking, short abstract queries skipped the LLM API, advanced search auto-switched to abstract scope when fit sorting was selected, long abstract top matches exceeded 2% fit labels and respected descending fit sorting after re-sorting, merged Indonesia and SINTA-only profiles rendered the expected non-metric status details, SINTA subject area influenced abstract matching, the dynamic journal profile page resolved correctly, and legacy journal URLs redirected to the new runtime profile path."
     )
     print(f"Prefix 'a' shards: {sorted(expected_a)}")
     print(f"Prefix 'j' shards: {sorted(expected_j)}")

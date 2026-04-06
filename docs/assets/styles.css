@@ -480,6 +480,12 @@ button:disabled {
   margin-bottom: 1.15rem;
 }
 
+.results-toolbar-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
 .table-controls-right {
   display: flex;
   align-items: center;
@@ -490,6 +496,36 @@ button:disabled {
 .results-toolbar-actions {
   display: flex;
   margin-left: auto;
+}
+
+.ranking-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: fit-content;
+  padding: 0.55rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.ranking-status strong {
+  color: inherit;
+}
+
+.ranking-status-llm {
+  border-color: rgba(47, 125, 50, 0.18);
+  background: rgba(47, 125, 50, 0.1);
+  color: var(--success);
+}
+
+.ranking-status-fallback {
+  border-color: rgba(230, 90, 44, 0.16);
+  background: rgba(230, 90, 44, 0.1);
+  color: #9f3d18;
 }
 
 .table-filter-pills {
@@ -873,6 +909,13 @@ tbody tr:last-child td {
   line-height: 1.7;
 }
 
+.llm-privacy-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
 .search-query-field textarea {
   min-height: 12rem;
   line-height: 1.75;
@@ -907,6 +950,22 @@ tbody tr:last-child td {
 }
 
 .match-insight strong {
+  color: var(--ink);
+}
+
+.llm-insight {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  background: rgba(47, 125, 50, 0.1);
+  border: 1px solid rgba(47, 125, 50, 0.16);
+  color: #215923;
+}
+
+.llm-insight strong {
   color: var(--ink);
 }
 

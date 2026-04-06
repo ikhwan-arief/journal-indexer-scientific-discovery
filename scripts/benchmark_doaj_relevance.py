@@ -37,6 +37,8 @@ DEFAULT_PAGE_SIZE = 20
 DEFAULT_MAX_PAGES = 2
 DEFAULT_MAX_RANK = 10
 DEFAULT_MIN_ABSTRACT_CHARS = 500
+DEFAULT_LLM_TIMEOUT_MS = 8000
+DEFAULT_CANDIDATE_DEPTH = 50
 DOAJ_API_BASE = "https://doaj.org/api/v4/search/articles/"
 DOAJ_USER_AGENT = "journal-discovery-benchmark/1.0"
 
@@ -459,6 +461,27 @@ def wait_for_results(page) -> None:
     )
 
 
+def configure_llm_runtime(page, llm_rerank_url: str | None, llm_timeout_ms: int, candidate_depth: int) -> None:
+    if not llm_rerank_url:
+        return
+    config = json.dumps(
+        {
+            "llmApiBaseUrl": llm_rerank_url,
+            "llmTimeoutMs": llm_timeout_ms,
+            "llmAbstractEnabled": True,
+            "llmCandidateLimit": candidate_depth,
+        }
+    )
+    page.add_init_script(
+        script=f"""
+            window.__JD_RUNTIME_CONFIG__ = {{
+                ...(window.__JD_RUNTIME_CONFIG__ || {{}}),
+                ...{config}
+            }};
+        """
+    )
+
+
 def collect_ranked_titles(page, max_rank: int) -> list[str]:
     titles_seen: list[str] = []
 
@@ -499,6 +522,9 @@ def evaluate_cases(
     dataset_lookup: dict[str, dict[str, Any]],
     max_rank: int,
     sort_order: str,
+    llm_rerank_url: str | None = None,
+    llm_timeout_ms: int = DEFAULT_LLM_TIMEOUT_MS,
+    candidate_depth: int = DEFAULT_CANDIDATE_DEPTH,
 ) -> list[dict[str, Any]]:
     profiles_by_id = {profile["id"]: profile for profile in DOMAIN_PROFILES}
     results: list[dict[str, Any]] = []
@@ -506,6 +532,7 @@ def evaluate_cases(
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         page = browser.new_page()
+        configure_llm_runtime(page, llm_rerank_url, llm_timeout_ms, candidate_depth)
 
         for case in cases:
             search_url = f"{base_url}/search/?scope=abstract&q={quote_plus(str(case['abstract']))}"
@@ -621,6 +648,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-rank", type=int, default=DEFAULT_MAX_RANK, help="Maximum search-result depth to score.")
     parser.add_argument("--min-abstract-chars", type=int, default=DEFAULT_MIN_ABSTRACT_CHARS, help="Minimum abstract length required for a DOAJ case.")
     parser.add_argument("--sort", choices=["default", "fit_desc"], default="default", help="Result ordering to evaluate.")
+    parser.add_argument("--llm-rerank-url", type=str, default="", help="Optional Journal Discovery LLM API base URL for reranked abstract evaluation.")
+    parser.add_argument("--llm-timeout-ms", type=int, default=DEFAULT_LLM_TIMEOUT_MS, help="Frontend LLM rerank timeout in milliseconds when --llm-rerank-url is used.")
+    parser.add_argument("--candidate-depth", type=int, default=DEFAULT_CANDIDATE_DEPTH, help="Maximum number of top lexical candidates to send to the LLM reranker.")
     return parser.parse_args()
 
 
@@ -647,6 +677,9 @@ def main() -> int:
             dataset_lookup=dataset_lookup,
             max_rank=args.max_rank,
             sort_order=args.sort,
+            llm_rerank_url=args.llm_rerank_url or None,
+            llm_timeout_ms=args.llm_timeout_ms,
+            candidate_depth=args.candidate_depth,
         )
 
     return print_summary(results, skipped_profiles=skipped_profiles, max_rank=args.max_rank, sort_order=args.sort)

@@ -20,6 +20,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-pages", type=int, default=2, help="Maximum DOAJ result pages to inspect per query.")
     parser.add_argument("--min-abstract-chars", type=int, default=DOAJ_BENCHMARK.DEFAULT_MIN_ABSTRACT_CHARS, help="Minimum abstract length required for a DOAJ case.")
     parser.add_argument("--candidate-depth", type=int, default=10, help="Maximum rank depth to collect from each ranking method.")
+    parser.add_argument("--llm-rerank-url", type=str, default="", help="Optional Journal Discovery LLM API base URL for collecting LLM-assisted app ranks.")
+    parser.add_argument("--llm-timeout-ms", type=int, default=DOAJ_BENCHMARK.DEFAULT_LLM_TIMEOUT_MS, help="Frontend LLM rerank timeout in milliseconds when --llm-rerank-url is used.")
     return parser.parse_args()
 
 
@@ -39,49 +41,89 @@ def main() -> int:
     profile_lookup = {profile["id"]: profile for profile in DOAJ_BENCHMARK.DOMAIN_PROFILES}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with DOAJ_BENCHMARK.static_server(DOAJ_BENCHMARK.DOCS_DIR) as base_url:
-        app_results = DOAJ_BENCHMARK.evaluate_cases(
+        dataset_lookup = {
+            normalized_title: {
+                **record.raw_record,
+                "_normalized_title": record.normalized_title,
+                "_normalized_text": " ".join(
+                    [
+                        str(record.title or "").lower(),
+                        str(record.categories or "").lower(),
+                        str(record.areas or "").lower(),
+                    ]
+                ),
+            }
+            for normalized_title, record in index.record_lookup.items()
+        }
+        app_default_results = DOAJ_BENCHMARK.evaluate_cases(
             base_url=base_url,
             cases=doaj_cases,
-            dataset_lookup={
-                normalized_title: {
-                    **record.raw_record,
-                    "_normalized_title": record.normalized_title,
-                    "_normalized_text": " ".join([record.title.lower(), record.categories.lower(), record.areas.lower()]),
-                }
-                for normalized_title, record in index.record_lookup.items()
-            },
+            dataset_lookup=dataset_lookup,
             max_rank=args.candidate_depth,
             sort_order="default",
         )
+        app_llm_results = (
+            DOAJ_BENCHMARK.evaluate_cases(
+                base_url=base_url,
+                cases=doaj_cases,
+                dataset_lookup=dataset_lookup,
+                max_rank=args.candidate_depth,
+                sort_order="default",
+                llm_rerank_url=args.llm_rerank_url or None,
+                llm_timeout_ms=args.llm_timeout_ms,
+                candidate_depth=args.candidate_depth,
+            )
+            if args.llm_rerank_url
+            else []
+        )
 
-    app_lookup = {
+    app_default_lookup = {
         (str(case["profile_id"]), str(case["title"]), str(case["journal"])): case
-        for case in app_results
+        for case in app_default_results
+    }
+    app_llm_lookup = {
+        (str(case["profile_id"]), str(case["title"]), str(case["journal"])): case
+        for case in app_llm_results
     }
 
     rows: list[dict[str, str]] = []
     for case_number, case in enumerate(doaj_cases, start=1):
         bm25f_ranked = index.bm25f_rank(str(case["abstract"]), max_rank=args.candidate_depth)
         tfidf_ranked = index.tfidf_rank(str(case["abstract"]), max_rank=args.candidate_depth)
-        app_case = app_lookup[(str(case["profile_id"]), str(case["title"]), str(case["journal"]))]
+        app_default_case = app_default_lookup[(str(case["profile_id"]), str(case["title"]), str(case["journal"]))]
+        app_llm_case = app_llm_lookup.get((str(case["profile_id"]), str(case["title"]), str(case["journal"])))
         profile = profile_lookup[str(case["profile_id"])]
 
         candidate_map: dict[str, dict[str, object]] = {}
-        for entry in app_case["ranked_results"]:
+        for entry in app_default_case["ranked_results"]:
             candidate_map.setdefault(
                 str(entry["title"]),
                 {
                     "app_rank": str(entry["rank"]),
+                    "app_llm_rank": "",
                     "bm25f_rank": "",
                     "tfidf_rank": "",
                     "profile_grade_hint": str(entry["grade"]),
                 },
             )
+        if app_llm_case:
+            for entry in app_llm_case["ranked_results"]:
+                candidate_map.setdefault(
+                    str(entry["title"]),
+                    {
+                        "app_rank": "",
+                        "app_llm_rank": "",
+                        "bm25f_rank": "",
+                        "tfidf_rank": "",
+                        "profile_grade_hint": str(entry["grade"]),
+                    },
+                )
+                candidate_map[str(entry["title"])]["app_llm_rank"] = str(entry["rank"])
         for rank, (_, record) in enumerate(bm25f_ranked, start=1):
-            candidate_map.setdefault(record.title, {"app_rank": "", "bm25f_rank": "", "tfidf_rank": "", "profile_grade_hint": ""})
+            candidate_map.setdefault(record.title, {"app_rank": "", "app_llm_rank": "", "bm25f_rank": "", "tfidf_rank": "", "profile_grade_hint": ""})
             candidate_map[record.title]["bm25f_rank"] = str(rank)
         for rank, (_, record) in enumerate(tfidf_ranked, start=1):
-            candidate_map.setdefault(record.title, {"app_rank": "", "bm25f_rank": "", "tfidf_rank": "", "profile_grade_hint": ""})
+            candidate_map.setdefault(record.title, {"app_rank": "", "app_llm_rank": "", "bm25f_rank": "", "tfidf_rank": "", "profile_grade_hint": ""})
             candidate_map[record.title]["tfidf_rank"] = str(rank)
 
         for candidate_title, scores in sorted(
@@ -90,7 +132,7 @@ def main() -> int:
                 min(
                     [
                         int(value)
-                        for value in [item[1]["app_rank"], item[1]["bm25f_rank"], item[1]["tfidf_rank"]]
+                        for value in [item[1]["app_rank"], item[1]["app_llm_rank"], item[1]["bm25f_rank"], item[1]["tfidf_rank"]]
                         if str(value).isdigit()
                     ]
                     or [999]
@@ -113,6 +155,7 @@ def main() -> int:
                     "abstract": str(case["abstract"]),
                     "candidate_journal": candidate_title,
                     "app_default_rank": str(scores["app_rank"]),
+                    "app_llm_rank": str(scores["app_llm_rank"]),
                     "bm25f_rank": str(scores["bm25f_rank"]),
                     "tfidf_rank": str(scores["tfidf_rank"]),
                     "auto_grade_hint": str(scores["profile_grade_hint"]),
@@ -139,6 +182,7 @@ def main() -> int:
                 "abstract",
                 "candidate_journal",
                 "app_default_rank",
+                "app_llm_rank",
                 "bm25f_rank",
                 "tfidf_rank",
                 "auto_grade_hint",

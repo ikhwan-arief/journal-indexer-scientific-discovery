@@ -79,6 +79,10 @@ const ABSTRACT_LOW_SIGNAL_TOKEN_WEIGHT = 0.25;
 const ABSTRACT_TOKEN_SIGNAL_REFERENCE = 60;
 const ABSTRACT_TOKEN_SIGNAL_MIN = 0.6;
 const ABSTRACT_TOKEN_SIGNAL_MAX = 1.8;
+const DEFAULT_LLM_TIMEOUT_MS = 8000;
+const LLM_ABSTRACT_MIN_CHARS = 200;
+const LLM_ABSTRACT_MIN_MEANINGFUL_TOKENS = 15;
+const LLM_RERANK_CANDIDATE_LIMIT = 50;
 const ABSTRACT_LOW_SIGNAL_TERMS = [
   "study", "work", "research", "result", "method", "analysis", "data", "model", "system", "approach",
   "performance", "program", "strategy", "design", "evaluation", "practice", "management", "policy",
@@ -324,6 +328,7 @@ function displayAbstractSignal(signal) {
 }
 
 function buildProcessedQuery(rawValue, scope) {
+  const trimmedRaw = (rawValue || "").trim();
   const normalized = normalizeText(rawValue);
   const literalTokens = normalized ? normalized.split(" ").filter(Boolean) : [];
   const tokens = tokenizeSearchText(rawValue);
@@ -338,11 +343,14 @@ function buildProcessedQuery(rawValue, scope) {
 
   return {
     raw: rawValue || "",
+    trimmedRaw,
+    rawLength: trimmedRaw.length,
     normalized,
     literalTokens,
     tokens,
     conceptTokens,
     phraseTokens,
+    meaningfulTokenCount: tokens.length,
     hasRawQuery: Boolean(normalized),
     hasMeaningfulTokens: hasMeaningfulSignals,
     canUseLiteralOnly,
@@ -444,6 +452,76 @@ function withVersion(relativePath, versionTag) {
   }
   const separator = relativePath.includes("?") ? "&" : "?";
   return `${relativePath}${separator}v=${encodeURIComponent(versionTag)}`;
+}
+
+function normalizeBoolean(value, fallback = false) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) {
+    return true;
+  }
+  if (["0", "false", "no", "off"].includes(normalized)) {
+    return false;
+  }
+  return fallback;
+}
+
+function normalizeInteger(value, fallback) {
+  const parsed = Number.parseInt(String(value || "").trim(), 10);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return parsed;
+}
+
+function trimTrailingSlashes(value) {
+  return String(value || "").trim().replace(/\/+$/, "");
+}
+
+function llmAbstractEndpoint(baseUrl) {
+  const trimmed = trimTrailingSlashes(baseUrl);
+  if (!trimmed) {
+    return "";
+  }
+  if (trimmed.endsWith("/v1/abstract-match")) {
+    return trimmed;
+  }
+  if (trimmed.endsWith("/v1")) {
+    return `${trimmed}/abstract-match`;
+  }
+  return `${trimmed}/v1/abstract-match`;
+}
+
+function readRuntimeConfig(body) {
+  const override = window.__JD_RUNTIME_CONFIG__ || {};
+  const apiBaseUrl = trimTrailingSlashes(override.llmApiBaseUrl || body.dataset.llmApiBaseUrl || "");
+  const enabled = normalizeBoolean(
+    override.llmAbstractEnabled,
+    normalizeBoolean(body.dataset.llmAbstractEnabled, Boolean(apiBaseUrl))
+  ) && Boolean(apiBaseUrl);
+  const timeoutMs = Math.max(
+    1000,
+    Math.min(
+      60000,
+      normalizeInteger(override.llmTimeoutMs, normalizeInteger(body.dataset.llmTimeoutMs, DEFAULT_LLM_TIMEOUT_MS))
+    )
+  );
+  const llmCandidateLimit = Math.max(
+    1,
+    Math.min(
+      LLM_RERANK_CANDIDATE_LIMIT,
+      normalizeInteger(override.llmCandidateLimit, normalizeInteger(body.dataset.llmCandidateLimit, LLM_RERANK_CANDIDATE_LIMIT))
+    )
+  );
+
+  return {
+    llmApiBaseUrl: apiBaseUrl,
+    llmAbstractEnabled: enabled,
+    llmTimeoutMs: timeoutMs,
+    llmCandidateLimit,
+  };
 }
 
 function blurPaginationFocus() {
@@ -911,6 +989,47 @@ function createInsightBox(insight, fitPercentage) {
   return wrapper;
 }
 
+function matchedFieldLabel(field) {
+  if (field === "title") return "Title";
+  if (field === "categories") return "Categories";
+  if (field === "areas") return "Areas";
+  if (field === "subject_area") return "SINTA Subject Area";
+  return field;
+}
+
+function createLlmInsightBox(summary) {
+  if (!summary || (!summary.rationale && !(summary.matchedFields || []).length)) {
+    return null;
+  }
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "llm-insight";
+
+  const heading = document.createElement("strong");
+  heading.textContent = `LLM scope score: ${summary.llmScore}/100`;
+  wrapper.appendChild(heading);
+
+  if (summary.rationale) {
+    const rationale = document.createElement("span");
+    rationale.textContent = summary.rationale;
+    wrapper.appendChild(rationale);
+  }
+
+  if ((summary.matchedFields || []).length) {
+    const fields = document.createElement("span");
+    fields.textContent = `Matched fields: ${summary.matchedFields.map(matchedFieldLabel).join(", ")}.`;
+    wrapper.appendChild(fields);
+  }
+
+  if (typeof summary.confidence === "number" && Number.isFinite(summary.confidence)) {
+    const confidence = document.createElement("span");
+    confidence.textContent = `Model confidence: ${Math.round(summary.confidence * 100)}%.`;
+    wrapper.appendChild(confidence);
+  }
+
+  return wrapper;
+}
+
 function createResultSummary(record) {
   const wrapper = document.createElement("div");
   wrapper.className = "result-summary";
@@ -936,12 +1055,16 @@ function createResultSummary(record) {
     summaryItems.push(`Indexed in: ${record.index_summary}`);
   }
 
-  if (record.subject_area) {
+  if (record.source_type === "sinta" && record.subject_area) {
     summaryItems.push(`Subject area: ${record.subject_area}`);
   }
 
   wrapper.textContent = summaryItems.join(" • ");
   return wrapper;
+}
+
+function shouldShowSintaSubjectArea(record) {
+  return record?.source_type === "sinta" && Boolean(record?.subject_area);
 }
 
 function normalizeSortOrder(value) {
@@ -1223,7 +1346,9 @@ function renderProfilePage(record, siteRoot) {
   main.appendChild(buildDetailItem("SINTA Profile", record.sinta_url, siteRoot, true));
   main.appendChild(buildDetailItem("ISSN", (record.issns || []).join(", ")));
   main.appendChild(buildDetailItem("Coverage", record.coverage));
-  main.appendChild(buildDetailItem("SINTA Subject Area", record.subject_area));
+  if (shouldShowSintaSubjectArea(record)) {
+    main.appendChild(buildDetailItem("SINTA Subject Area", record.subject_area));
+  }
   main.appendChild(buildDetailItem("Categories", record.categories));
   main.appendChild(buildDetailItem("Areas", record.areas));
   main.appendChild(buildDetailItem("Open Access", record.open_access));
@@ -1236,7 +1361,12 @@ function renderProfilePage(record, siteRoot) {
   side.appendChild(buildDetailItem("Record Source", record.source_type === "sinta" ? "SINTA" : "Scimago"));
   side.appendChild(buildNavigationDetailItem("Search", searchUrl, "Search similar journals", `Search journals similar to ${record.title}`));
   side.appendChild(buildNavigationDetailItem("Navigation", joinRelative(siteRoot, ""), "Back to home", "Return to the search homepage"));
-  side.appendChild(buildDetailItem("Data note", "Website, accreditation, SINTA subject area, APC, license, and copyright details are shown when available."));
+  side.appendChild(
+    buildDetailItem(
+      "Data note",
+      "Website, accreditation, APC, license, and copyright details are shown when available. SINTA subject area appears only for SINTA-source journals."
+    )
+  );
   layout.appendChild(side);
 
   card.appendChild(layout);
@@ -1288,12 +1418,13 @@ async function renderDynamicProfile(profileIndex, siteRoot) {
   renderProfilePage(record, siteRoot);
 }
 
-function renderSearchExperience(manifest, siteRoot, pageMode) {
+function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
   const form = document.querySelector("#search-form");
   const results = document.querySelector("#search-results");
   const resultsCount = document.querySelector("#results-count");
   const resultsSummary = document.querySelector("#results-summary");
   const resultsSection = document.querySelector("#results-section");
+  const rankingStatus = document.querySelector("#ranking-status");
   const topPaginationInfo = document.querySelector("#search-pagination-top-info");
   const topPaginationList = document.querySelector("#search-pagination-top-list");
   const paginationInfo = document.querySelector("#search-pagination-info");
@@ -1305,6 +1436,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
   const quartileSelect = document.querySelector("#quartile-filter");
   const countrySelect = document.querySelector("#country-filter");
   const sortSelect = document.querySelector("#sort-order");
+  const privacyNote = document.querySelector("#llm-privacy-note");
 
   if (!form || !results || !resultsCount || !queryInput || !scopeField) {
     return;
@@ -1321,11 +1453,21 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
     { info: topPaginationInfo, list: topPaginationList },
     { info: paginationInfo, list: paginationList },
   ];
+  const llmRerankCache = new Map();
+  const llmPendingMap = new Map();
   let records = [];
   let page = 1;
+  let preparedStateKey = "";
+  let preparedEntries = [];
+  let preparedRankingStatus = null;
+  let activeLoadToken = 0;
 
   if (resultsSummary) {
     resultsSummary.textContent = `${totalProfiles} journal profiles ready`;
+  }
+
+  if (privacyNote) {
+    privacyNote.hidden = !runtimeConfig.llmAbstractEnabled;
   }
 
   if (countrySelect) {
@@ -1352,6 +1494,49 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
 
   function currentScope() {
     return scopeField.value || (pageMode === "home" ? "abstract" : "all");
+  }
+
+  function currentStateKey(state) {
+    return JSON.stringify({
+      query: state.query.normalized,
+      scope: state.scope,
+      index: state.indexFilter,
+      accreditation: state.accreditationFilter,
+      quartile: state.quartileFilter,
+      country: state.countryFilter,
+      sort: state.sortOrder,
+      llmApi: runtimeConfig.llmApiBaseUrl,
+      llmEnabled: runtimeConfig.llmAbstractEnabled,
+      llmTimeoutMs: runtimeConfig.llmTimeoutMs,
+      llmCandidateLimit: runtimeConfig.llmCandidateLimit,
+      versionTag,
+    });
+  }
+
+  function setRankingStatus(status) {
+    if (!rankingStatus) {
+      return;
+    }
+    if (!status) {
+      rankingStatus.hidden = true;
+      rankingStatus.className = "ranking-status";
+      rankingStatus.replaceChildren();
+      return;
+    }
+
+    rankingStatus.hidden = false;
+    rankingStatus.className = `ranking-status ${status.mode === "llm" ? "ranking-status-llm" : "ranking-status-fallback"}`;
+    rankingStatus.replaceChildren();
+
+    const title = document.createElement("strong");
+    title.textContent = status.label;
+    rankingStatus.appendChild(title);
+
+    if (status.detail) {
+      const detail = document.createElement("span");
+      detail.textContent = status.detail;
+      rankingStatus.appendChild(detail);
+    }
   }
 
   function alignSortWithScope(scope) {
@@ -1392,6 +1577,216 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
       shouldShowPrompt: !hasFilters && !query.hasRawQuery,
       shouldShowNlpHelp: !hasFilters && query.hasRawQuery && !query.shouldLoad,
     };
+  }
+
+  function lexicalFallbackStatus(detail) {
+    return {
+      mode: "fallback",
+      label: "Lexical fallback",
+      detail,
+    };
+  }
+
+  function defaultRankingStatus(state) {
+    if (state.scope !== "abstract" || !state.query.hasRawQuery) {
+      return null;
+    }
+    if (state.sortOrder === "fit_desc") {
+      return lexicalFallbackStatus("Highest abstract fit keeps ranking local and deterministic.");
+    }
+    if (!runtimeConfig.llmAbstractEnabled || !runtimeConfig.llmApiBaseUrl) {
+      return lexicalFallbackStatus("LLM API is not configured for this build.");
+    }
+    if (state.query.rawLength < LLM_ABSTRACT_MIN_CHARS || state.query.meaningfulTokenCount < LLM_ABSTRACT_MIN_MEANINGFUL_TOKENS) {
+      return lexicalFallbackStatus(`Abstracts shorter than ${LLM_ABSTRACT_MIN_CHARS} characters or below ${LLM_ABSTRACT_MIN_MEANINGFUL_TOKENS} meaningful tokens use the local scorer.`);
+    }
+    return lexicalFallbackStatus("The local scorer is active while the shortlist is prepared.");
+  }
+
+  function shouldUseLlmAbstractRanking(state) {
+    return (
+      state.scope === "abstract"
+      && state.sortOrder === "default"
+      && state.query.shouldLoad
+      && state.query.hasRawQuery
+      && runtimeConfig.llmAbstractEnabled
+      && Boolean(runtimeConfig.llmApiBaseUrl)
+      && state.query.rawLength >= LLM_ABSTRACT_MIN_CHARS
+      && state.query.meaningfulTokenCount >= LLM_ABSTRACT_MIN_MEANINGFUL_TOKENS
+    );
+  }
+
+  function llmErrorDetail(error, fallbackReason = "The LLM API could not be reached.") {
+    if (error?.name === "AbortError") {
+      return "The LLM API timed out, so the local scorer was used.";
+    }
+    const message = String(error?.message || fallbackReason).trim();
+    if (!message) {
+      return fallbackReason;
+    }
+    return message;
+  }
+
+  async function rerankAbstractEntries(state, lexicalEntries) {
+    const stateKey = currentStateKey(state);
+    if (llmRerankCache.has(stateKey)) {
+      return llmRerankCache.get(stateKey);
+    }
+    if (llmPendingMap.has(stateKey)) {
+      return llmPendingMap.get(stateKey);
+    }
+
+    const topEntries = lexicalEntries.slice(0, Math.min(runtimeConfig.llmCandidateLimit, lexicalEntries.length));
+    const endpoint = llmAbstractEndpoint(runtimeConfig.llmApiBaseUrl);
+    const payload = {
+      query_text: state.query.trimmedRaw,
+      top_n: topEntries.length,
+      candidates: topEntries.map((entry) => ({
+        sourceid: entry.record.sourceid,
+        title: entry.record.title,
+        categories: entry.record.categories,
+        areas: entry.record.areas,
+        subject_area: entry.record.subject_area,
+        publisher: entry.record.publisher,
+        country: entry.record.country,
+        lexical_score: entry.score,
+      })),
+    };
+
+    const pending = (async () => {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), runtimeConfig.llmTimeoutMs);
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          credentials: "omit",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          let detail = `The LLM API returned status ${response.status}.`;
+          try {
+            const errorPayload = await response.json();
+            if (errorPayload?.detail) {
+              detail = String(errorPayload.detail);
+            }
+          } catch (error) {
+            void error;
+          }
+          throw new Error(detail);
+        }
+
+        const responsePayload = await response.json();
+        const ranked = Array.isArray(responsePayload?.ranked) ? responsePayload.ranked : [];
+        const rankedMap = new Map();
+        for (const item of ranked) {
+          const sourceid = String(item?.sourceid || "");
+          if (!sourceid || rankedMap.has(sourceid)) {
+            continue;
+          }
+          const rank = Number.parseInt(String(item.rank || ""), 10);
+          const llmScore = Math.max(0, Math.min(100, Number.parseInt(String(item.llm_score || 0), 10) || 0));
+          const rationale = String(item.rationale || "").trim();
+          const matchedFields = Array.isArray(item.matched_fields)
+            ? item.matched_fields.map((field) => String(field || "").trim()).filter(Boolean)
+            : [];
+          const confidence = Math.max(0, Math.min(1, Number(item.confidence || 0)));
+          rankedMap.set(sourceid, {
+            rank: Number.isFinite(rank) && rank > 0 ? rank : Number.POSITIVE_INFINITY,
+            llmScore,
+            rationale,
+            matchedFields,
+            confidence,
+          });
+        }
+
+        const rerankedTop = topEntries.map((entry) => {
+          const summary = rankedMap.get(String(entry.record.sourceid || ""));
+          return {
+            ...entry,
+            llmSummary: summary || null,
+            llmRank: summary?.rank ?? Number.POSITIVE_INFINITY,
+            llmScoreValue: summary?.llmScore ?? 0,
+          };
+        });
+
+        rerankedTop.sort((left, right) => {
+          if (left.llmRank !== right.llmRank) {
+            return left.llmRank - right.llmRank;
+          }
+          if (right.llmScoreValue !== left.llmScoreValue) {
+            return right.llmScoreValue - left.llmScoreValue;
+          }
+          if (right.score !== left.score) {
+            return right.score - left.score;
+          }
+          return compareMetricPriority(left, right);
+        });
+
+        const mergedEntries = [
+          ...rerankedTop,
+          ...lexicalEntries.slice(topEntries.length).map((entry) => ({ ...entry, llmSummary: null })),
+        ];
+        const modelName = String(responsePayload?.model || "").trim();
+        return {
+          entries: mergedEntries,
+          rankingStatus: {
+            mode: "llm",
+            label: "LLM-assisted ranking",
+            detail: `${topEntries.length} shortlisted journals reranked${modelName ? ` via ${modelName}` : ""}.`,
+          },
+        };
+      } catch (error) {
+        return {
+          entries: lexicalEntries,
+          rankingStatus: lexicalFallbackStatus(llmErrorDetail(error)),
+        };
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+    })();
+
+    llmPendingMap.set(stateKey, pending);
+    try {
+      const result = await pending;
+      llmRerankCache.set(stateKey, result);
+      return result;
+    } finally {
+      llmPendingMap.delete(stateKey);
+    }
+  }
+
+  async function prepareEntries(state, loadToken) {
+    const stateKey = currentStateKey(state);
+    if (preparedStateKey === stateKey) {
+      return {
+        entries: preparedEntries,
+        rankingStatus: preparedRankingStatus,
+      };
+    }
+
+    const lexicalEntries = applyFilters(state);
+    let prepared = {
+      entries: lexicalEntries,
+      rankingStatus: defaultRankingStatus(state),
+    };
+
+    if (shouldUseLlmAbstractRanking(state) && lexicalEntries.length) {
+      prepared = await rerankAbstractEntries(state, lexicalEntries);
+    }
+
+    if (loadToken !== activeLoadToken) {
+      return prepared;
+    }
+
+    preparedStateKey = stateKey;
+    preparedEntries = prepared.entries;
+    preparedRankingStatus = prepared.rankingStatus;
+    return prepared;
   }
 
   function getPreferredChunkPaths(state) {
@@ -1465,7 +1860,11 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
   }
 
   function renderPrompt() {
+    preparedStateKey = "";
+    preparedEntries = [];
+    preparedRankingStatus = null;
     setResultsSectionVisible(false);
+    setRankingStatus(null);
     resultsCount.textContent = `${totalProfiles} journal profiles ready.`;
     if (pageMode === "home") {
       renderEmptyResults(
@@ -1481,7 +1880,11 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
   }
 
   function renderNlpHelp() {
+    preparedStateKey = "";
+    preparedEntries = [];
+    preparedRankingStatus = null;
     setResultsSectionVisible(true);
+    setRankingStatus(null);
     resultsCount.textContent = `Add more specific terms to search ${totalProfiles} journal profiles.`;
     renderEmptyResults(
       "Enter more specific search terms",
@@ -1491,6 +1894,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
 
   function renderLoadingState() {
     setResultsSectionVisible(true);
+    setRankingStatus(null);
     resultsCount.textContent = `Preparing matches from ${totalProfiles} journal profiles.`;
     results.replaceChildren(createEmptyState("Preparing search results", "Matching journal profiles are being loaded."));
     resetPaginationUi();
@@ -1604,7 +2008,9 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
 
   function renderPage(state, shouldScroll = false) {
     setResultsSectionVisible(true);
-    const filtered = applyFilters(state);
+    const stateKey = currentStateKey(state);
+    const filtered = preparedStateKey === stateKey ? preparedEntries : applyFilters(state);
+    const status = preparedStateKey === stateKey ? preparedRankingStatus : defaultRankingStatus(state);
     const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
     if (page > totalPages) {
       page = totalPages;
@@ -1613,6 +2019,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
     const pageItems = filtered.slice(start, start + perPage);
 
     results.replaceChildren();
+    setRankingStatus(status);
     resultsCount.textContent = `${filtered.length.toLocaleString("en-US")} matches found.`;
 
     if (!pageItems.length) {
@@ -1654,7 +2061,9 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
       main.className = "profile-main detail-grid";
       main.appendChild(buildDetailItem("Website", record.journal_url, siteRoot, true));
       main.appendChild(buildDetailItem("Affiliation", record.affiliation));
-      main.appendChild(buildDetailItem("SINTA Subject Area", record.subject_area));
+      if (shouldShowSintaSubjectArea(record)) {
+        main.appendChild(buildDetailItem("SINTA Subject Area", record.subject_area));
+      }
       main.appendChild(buildDetailItem("Categories", record.categories));
       main.appendChild(buildDetailItem("Areas", record.areas));
       main.appendChild(buildDetailItem("APC Status", record.apc_status));
@@ -1672,6 +2081,12 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
       }
       if (state.scope === "abstract" && abstractSummary) {
         side.appendChild(createInsightBox(abstractSummary, abstractSummary.fitPercentage));
+      }
+      if (state.scope === "abstract" && entry.llmSummary) {
+        const llmInsight = createLlmInsightBox(entry.llmSummary);
+        if (llmInsight) {
+          side.appendChild(llmInsight);
+        }
       }
       layout.appendChild(side);
 
@@ -1694,6 +2109,8 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
 
   async function loadAndRenderPage(shouldScroll = false) {
     const state = currentState();
+    activeLoadToken += 1;
+    const loadToken = activeLoadToken;
     if (state.shouldShowPrompt) {
       page = 1;
       syncUrl(state);
@@ -1714,6 +2131,10 @@ function renderSearchExperience(manifest, siteRoot, pageMode) {
     }
 
     await ensureRecordsLoaded(state);
+    await prepareEntries(state, loadToken);
+    if (loadToken !== activeLoadToken) {
+      return;
+    }
     syncUrl(state);
     renderPage(state, shouldScroll);
   }
@@ -1760,6 +2181,7 @@ async function init() {
   const page = body.dataset.page;
   const siteRoot = body.dataset.siteRoot || ".";
   const dataUrl = body.dataset.dataUrl;
+  const runtimeConfig = readRuntimeConfig(body);
   if (!page || !dataUrl) {
     return;
   }
@@ -1771,7 +2193,7 @@ async function init() {
   const payload = await response.json();
 
   if (page === "home" || page === "search") {
-    renderSearchExperience(payload, siteRoot, page);
+    renderSearchExperience(payload, siteRoot, page, runtimeConfig);
   }
   if (page === "profile") {
     await renderDynamicProfile(payload, siteRoot);

@@ -14,7 +14,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterable
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 SEARCH_CHUNK_SIZE = 2000
 
@@ -820,6 +820,94 @@ def maybe_canonical(relative_path: str) -> str:
     return f'<link rel="canonical" href="{html.escape(full_url, quote=True)}">'
 
 
+def parse_bool_env(name: str, default: bool) -> bool:
+    value = (os.getenv(name) or "").strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def llm_api_base_url() -> str:
+    return safe_url(os.getenv("LLM_API_BASE_URL")) or ""
+
+
+def llm_abstract_enabled() -> bool:
+    api_url = llm_api_base_url()
+    if not api_url:
+        return False
+    raw_value = (os.getenv("LLM_ABSTRACT_MATCH_ENABLED") or "").strip()
+    if not raw_value:
+        return True
+    return parse_bool_env("LLM_ABSTRACT_MATCH_ENABLED", default=True)
+
+
+def llm_timeout_ms() -> int:
+    raw_value = (os.getenv("LLM_TIMEOUT_MS") or "").strip()
+    if not raw_value:
+        return 8000
+    try:
+        value = int(raw_value)
+    except ValueError:
+        return 8000
+    return max(1000, min(60000, value))
+
+
+def llm_candidate_limit() -> int:
+    raw_value = (os.getenv("LLM_CANDIDATE_LIMIT") or "").strip()
+    if not raw_value:
+        return 50
+    try:
+        value = int(raw_value)
+    except ValueError:
+        return 50
+    return max(1, min(50, value))
+
+
+def llm_connect_origin() -> str:
+    api_url = llm_api_base_url()
+    if not api_url:
+        return ""
+    parsed = urlparse(api_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def page_csp() -> str:
+    directives = [
+        "default-src 'self'",
+        "img-src 'self' data:",
+        "style-src 'self'",
+        "script-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    ]
+    connect_origin = llm_connect_origin()
+    if connect_origin:
+        directives.insert(1, f"connect-src 'self' {connect_origin}")
+    return "; ".join(directives)
+
+
+def runtime_body_attrs(page: str, site_root: str, data_url: str) -> str:
+    attributes = {
+        "data-page": page,
+        "data-site-root": site_root,
+        "data-data-url": data_url,
+        "data-llm-abstract-enabled": "true" if llm_abstract_enabled() else "false",
+        "data-llm-api-base-url": llm_api_base_url(),
+        "data-llm-timeout-ms": str(llm_timeout_ms()),
+        "data-llm-candidate-limit": str(llm_candidate_limit()),
+    }
+    return " ".join(
+        f'{name}="{html.escape(value, quote=True)}"'
+        for name, value in attributes.items()
+    )
+
+
 def version_token(summary: SiteSummary) -> str:
     return quote_plus(summary.generated_at)
 
@@ -848,7 +936,10 @@ def render_index_labels(record: JournalRecord) -> str:
 def results_panel_html() -> str:
     return """<div class=\"results-panel\">
             <div class=\"results-toolbar\">
-              <div class=\"results-count\" id=\"results-count\">Journal profiles ready.</div>
+              <div class=\"results-toolbar-meta\">
+                <div class=\"results-count\" id=\"results-count\">Journal profiles ready.</div>
+                <div class=\"ranking-status\" id=\"ranking-status\" hidden></div>
+              </div>
               <div class=\"results-toolbar-actions\">
                 <div class=\"pagination pagination-inline\">
                   <div class=\"pagination-info\" id=\"search-pagination-top-info\"></div>
@@ -869,6 +960,7 @@ def home_page_html(summary: SiteSummary) -> str:
     script_src = versioned_path("assets/app.js", summary)
     data_url = versioned_path("data/search-manifest.json", summary)
     total_profiles = format(summary.total_journals, ",")
+    runtime_attrs = runtime_body_attrs("home", ".", data_url)
     return f"""<!doctype html>
 <!-- Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id) -->
 <!-- Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) -->
@@ -879,12 +971,12 @@ def home_page_html(summary: SiteSummary) -> str:
     <title>Journal Discovery | Match journal profiles from article abstracts</title>
     <meta name=\"description\" content=\"Search journal discovery data built from Scimago, SINTA, WoS, and optional DOAJ enrichment, with abstract-to-journal matching based on journal titles, categories, areas, and SINTA subject areas.\">
     <meta name=\"robots\" content=\"index,follow\">
-    <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
+    <meta http-equiv=\"Content-Security-Policy\" content=\"{html.escape(page_csp(), quote=True)}\">
     {maybe_canonical('')}
     <link rel=\"stylesheet\" href=\"{html.escape(stylesheet_href, quote=True)}\">
     <script defer src=\"{html.escape(script_src, quote=True)}\"></script>
   </head>
-  <body data-page=\"home\" data-site-root=\".\" data-data-url=\"{html.escape(data_url, quote=True)}\">
+  <body {runtime_attrs}>
     <a class=\"skip-link\" href=\"#main\">Skip to content</a>
     <header class=\"site-header\">
       <div class=\"shell\">
@@ -911,6 +1003,7 @@ def home_page_html(summary: SiteSummary) -> str:
                   <span>Paste article abstract</span>
                   <textarea id=\"q\" name=\"q\" rows=\"6\" placeholder=\"Paste an article abstract. The app compares it with journal titles, categories, areas, and SINTA subject areas to suggest relevant journals.\"></textarea>
                 </label>
+                <p class=\"llm-privacy-note\" id=\"llm-privacy-note\" hidden>When LLM-assisted ranking is enabled, submitted abstracts are sent to the configured inference API for topical reranking.</p>
                 <div class=\"field hero-sort-field\">
                   <label for=\"sort-order\">Sort results</label>
                   <select id=\"sort-order\" name=\"sort\">
@@ -934,7 +1027,7 @@ def home_page_html(summary: SiteSummary) -> str:
             <div>
               <p class=\"eyebrow results-eyebrow\">SEARCH RESULTS</p>
               <h2>Recommended journals</h2>
-              <p class=\"table-note\">Results appear here only after you submit an abstract or keyword query. Rankings combine literal matching and lightweight NLP over journal titles, categories, areas, and SINTA subject areas.</p>
+              <p class=\"table-note\">Results appear here only after you submit an abstract or keyword query. Abstract ranking uses the local scorer by default and can rerank the shortlist through the configured LLM API when enabled.</p>
             </div>
             <div class=\"table-chip\" id=\"results-summary\">{total_profiles} journal profiles ready</div>
           </div>
@@ -958,6 +1051,7 @@ def search_page_html(summary: SiteSummary) -> str:
     script_src = versioned_path("../assets/app.js", summary)
     data_url = versioned_path("../data/search-manifest.json", summary)
     total_profiles = format(summary.total_journals, ",")
+    runtime_attrs = runtime_body_attrs("search", "..", data_url)
     return f"""<!doctype html>
 <!-- Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id) -->
 <!-- Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) -->
@@ -968,12 +1062,12 @@ def search_page_html(summary: SiteSummary) -> str:
     <title>Search Journal Profiles | Journal Discovery</title>
     <meta name=\"description\" content=\"Search journal profiles by abstract, keyword, full title, publisher, URL fragment, country, indexing status, accreditation, or best SJR quartile.\">
     <meta name=\"robots\" content=\"index,follow\">
-    <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
+    <meta http-equiv=\"Content-Security-Policy\" content=\"{html.escape(page_csp(), quote=True)}\">
     {maybe_canonical('search/')}
     <link rel=\"stylesheet\" href=\"{html.escape(stylesheet_href, quote=True)}\">
     <script defer src=\"{html.escape(script_src, quote=True)}\"></script>
   </head>
-  <body data-page=\"search\" data-site-root=\"..\" data-data-url=\"{html.escape(data_url, quote=True)}\">
+  <body {runtime_attrs}>
     <a class=\"skip-link\" href=\"#main\">Skip to content</a>
     <header class=\"site-header\">
       <div class=\"shell\">
@@ -994,6 +1088,7 @@ def search_page_html(summary: SiteSummary) -> str:
             <div class=\"hero-content\">
               <h1>Search journal profiles by abstract, keyword, title, publisher, or URL.</h1>
               <p class=\"hero-copy\">Use abstract matching for recommendations, or switch scope and filters for a more precise search across journal metadata, accreditation, and indexing status.</p>
+              <p class=\"llm-privacy-note\" id=\"llm-privacy-note\" hidden>When LLM-assisted ranking is enabled, submitted abstracts are sent to the configured inference API for topical reranking.</p>
             </div>
           </div>
         </div>
@@ -1005,7 +1100,7 @@ def search_page_html(summary: SiteSummary) -> str:
             <div>
               <p class=\"eyebrow results-eyebrow\">ADVANCED SEARCH</p>
               <h2>Search journal profiles</h2>
-              <p class=\"table-note\">Search by abstract, keyword, title, publisher, URL fragment, indexing status, accreditation, best quartile, or country. Choosing <strong>Highest abstract fit</strong> will switch the scope to abstract matching automatically.</p>
+              <p class=\"table-note\">Search by abstract, keyword, title, publisher, URL fragment, indexing status, accreditation, best quartile, or country. Choosing <strong>Highest abstract fit</strong> keeps ranking local and explanation-focused.</p>
             </div>
             <div class=\"table-chip\" id=\"results-summary\">{total_profiles} journal profiles ready</div>
           </div>
@@ -1096,6 +1191,7 @@ def profile_page_html(summary: SiteSummary) -> str:
     stylesheet_href = versioned_path("../assets/styles.css", summary)
     script_src = versioned_path("../assets/app.js", summary)
     data_url = versioned_path("../data/profile-index.json", summary)
+    runtime_attrs = runtime_body_attrs("profile", "..", data_url)
     return f"""<!doctype html>
 <!-- Dikembangkan oleh Ikhwan Arief (ikhwan[at]unand.ac.id) -->
 <!-- Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0) -->
@@ -1109,12 +1205,12 @@ def profile_page_html(summary: SiteSummary) -> str:
     <meta property=\"og:title\" content=\"Journal Profile\">
     <meta property=\"og:description\" content=\"Journal profile with indexing labels, accreditation, publisher, country, ISSN, website availability, APC status, license, SINTA metadata, and SJR best quartile.\">
     <meta property=\"og:type\" content=\"website\">
-    <meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'\">
+    <meta http-equiv=\"Content-Security-Policy\" content=\"{html.escape(page_csp(), quote=True)}\">
     {maybe_canonical('journal/')}
     <link rel=\"stylesheet\" href=\"{html.escape(stylesheet_href, quote=True)}\">
     <script defer src=\"{html.escape(script_src, quote=True)}\"></script>
   </head>
-  <body data-page=\"profile\" data-site-root=\"..\" data-data-url=\"{html.escape(data_url, quote=True)}\">
+  <body {runtime_attrs}>
     <a class=\"skip-link\" href=\"#main\">Skip to content</a>
     <header class=\"site-header\">
       <div class=\"shell\">

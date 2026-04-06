@@ -8,12 +8,12 @@
     <title>Search Journal Profiles | Journal Discovery</title>
     <meta name="description" content="Search journal profiles by abstract, keyword, full title, publisher, URL fragment, country, indexing status, accreditation, or best SJR quartile.">
     <meta name="robots" content="index,follow">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'">
+    <meta http-equiv="Content-Security-Policy" content="default-src &#x27;self&#x27;; img-src &#x27;self&#x27; data:; style-src &#x27;self&#x27;; script-src &#x27;self&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;self&#x27;; form-action &#x27;self&#x27;; frame-ancestors &#x27;none&#x27;">
     
-    <link rel="stylesheet" href="../assets/styles.css?v=2026-04-03+04%3A17+UTC">
-    <script defer src="../assets/app.js?v=2026-04-03+04%3A17+UTC"></script>
+    <link rel="stylesheet" href="../assets/styles.css?v=2026-04-06+17%3A36+UTC">
+    <script defer src="../assets/app.js?v=2026-04-06+17%3A36+UTC"></script>
   </head>
-  <body data-page="search" data-site-root=".." data-data-url="../data/search-manifest.json?v=2026-04-03+04%3A17+UTC">
+  <body data-page="search" data-site-root=".." data-data-url="../data/search-manifest.json?v=2026-04-06+17%3A36+UTC" data-llm-abstract-enabled="false" data-llm-api-base-url="" data-llm-timeout-ms="8000" data-llm-candidate-limit="50">
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
       <div class="shell">
@@ -34,6 +34,7 @@
             <div class="hero-content">
               <h1>Search journal profiles by abstract, keyword, title, publisher, or URL.</h1>
               <p class="hero-copy">Use abstract matching for recommendations, or switch scope and filters for a more precise search across journal metadata, accreditation, and indexing status.</p>
+              <p class="llm-privacy-note" id="llm-privacy-note" hidden>When LLM-assisted ranking is enabled, submitted abstracts are sent to the configured inference API for topical reranking.</p>
             </div>
           </div>
         </div>
@@ -45,7 +46,7 @@
             <div>
               <p class="eyebrow results-eyebrow">ADVANCED SEARCH</p>
               <h2>Search journal profiles</h2>
-              <p class="table-note">Search by abstract, keyword, title, publisher, URL fragment, indexing status, accreditation, best quartile, or country. Choosing <strong>Highest abstract fit</strong> will switch the scope to abstract matching automatically.</p>
+              <p class="table-note">Search by abstract, keyword, title, publisher, URL fragment, indexing status, accreditation, best quartile, or country. Choosing <strong>Highest abstract fit</strong> keeps ranking local and explanation-focused.</p>
             </div>
             <div class="table-chip" id="results-summary">40,159 journal profiles ready</div>
           </div>
@@ -119,7 +120,10 @@
           </div>
           <div class="results-panel">
             <div class="results-toolbar">
-              <div class="results-count" id="results-count">Journal profiles ready.</div>
+              <div class="results-toolbar-meta">
+                <div class="results-count" id="results-count">Journal profiles ready.</div>
+                <div class="ranking-status" id="ranking-status" hidden></div>
+              </div>
               <div class="results-toolbar-actions">
                 <div class="pagination pagination-inline">
                   <div class="pagination-info" id="search-pagination-top-info"></div>

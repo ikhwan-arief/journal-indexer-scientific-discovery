@@ -34,6 +34,8 @@ MANIFEST_PATH = DOCS_DIR / "data" / "search-manifest.json"
 DEFAULT_REFS_DIR = Path.home() / "Documents" / "Disertasi" / "refs"
 DEFAULT_MAX_RANK = 50
 DEFAULT_PDF_TEXT_LIMIT = 24000
+DEFAULT_LLM_TIMEOUT_MS = 8000
+DEFAULT_CANDIDATE_DEPTH = 50
 BENCHMARK_CASES = [
     {
         "pdf": "Generative artificial intelligence augmenting SME financial management.pdf",
@@ -205,6 +207,27 @@ def wait_for_results(page) -> None:
     )
 
 
+def configure_llm_runtime(page, llm_rerank_url: str | None, llm_timeout_ms: int, candidate_depth: int) -> None:
+    if not llm_rerank_url:
+        return
+    config = json.dumps(
+        {
+            "llmApiBaseUrl": llm_rerank_url,
+            "llmTimeoutMs": llm_timeout_ms,
+            "llmAbstractEnabled": True,
+            "llmCandidateLimit": candidate_depth,
+        }
+    )
+    page.add_init_script(
+        script=f"""
+            window.__JD_RUNTIME_CONFIG__ = {{
+                ...(window.__JD_RUNTIME_CONFIG__ || {{}}),
+                ...{config}
+            }};
+        """
+    )
+
+
 def collect_rank(page, expected_title: str, max_rank: int) -> tuple[int | None, list[str]]:
     expected = normalize_text(expected_title)
     titles_seen: list[str] = []
@@ -272,11 +295,20 @@ def build_case_inputs(refs_dir: Path, dataset_titles: set[str], max_chars: int) 
     return cases
 
 
-def evaluate_cases(base_url: str, cases: list[dict[str, object]], max_rank: int, sort_order: str) -> list[dict[str, object]]:
+def evaluate_cases(
+    base_url: str,
+    cases: list[dict[str, object]],
+    max_rank: int,
+    sort_order: str,
+    llm_rerank_url: str | None = None,
+    llm_timeout_ms: int = DEFAULT_LLM_TIMEOUT_MS,
+    candidate_depth: int = DEFAULT_CANDIDATE_DEPTH,
+) -> list[dict[str, object]]:
     results: list[dict[str, object]] = []
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         page = browser.new_page()
+        configure_llm_runtime(page, llm_rerank_url, llm_timeout_ms, candidate_depth)
 
         for case in cases:
             query = str(case["abstract"])
@@ -338,6 +370,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-rank", type=int, default=DEFAULT_MAX_RANK, help="Maximum rank depth to search for the target journal.")
     parser.add_argument("--sort", choices=["default", "fit_desc"], default="default", help="Result ordering to evaluate.")
     parser.add_argument("--pdf-text-limit", type=int, default=DEFAULT_PDF_TEXT_LIMIT, help="Maximum number of PDF characters to extract before parsing the abstract.")
+    parser.add_argument("--llm-rerank-url", type=str, default="", help="Optional Journal Discovery LLM API base URL for reranked abstract evaluation.")
+    parser.add_argument("--llm-timeout-ms", type=int, default=DEFAULT_LLM_TIMEOUT_MS, help="Frontend LLM rerank timeout in milliseconds when --llm-rerank-url is used.")
+    parser.add_argument("--candidate-depth", type=int, default=DEFAULT_CANDIDATE_DEPTH, help="Maximum number of top lexical candidates to send to the LLM reranker.")
     return parser.parse_args()
 
 
@@ -354,7 +389,15 @@ def main() -> int:
         raise SystemExit("No benchmark cases could be constructed from the available PDF references.")
 
     with static_server(DOCS_DIR) as base_url:
-        results = evaluate_cases(base_url, cases, max_rank=args.max_rank, sort_order=args.sort)
+        results = evaluate_cases(
+            base_url,
+            cases,
+            max_rank=args.max_rank,
+            sort_order=args.sort,
+            llm_rerank_url=args.llm_rerank_url or None,
+            llm_timeout_ms=args.llm_timeout_ms,
+            candidate_depth=args.candidate_depth,
+        )
 
     return print_summary(results, max_rank=args.max_rank, sort_order=args.sort)
 
