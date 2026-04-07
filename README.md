@@ -127,6 +127,36 @@ When `LLM_PROVIDER_BASE_URL` is local and `LLM_PROVIDER_TIMEOUT_SECONDS` is not 
 
 Container deployment notes for the API are in `deployment/llm_api/README.md`.
 
+## GitHub-Only Online Bridge
+
+If you do not have a permanent public host for the LLM API, you can temporarily power the GitHub Pages site from your local machine by combining:
+
+- the local FastAPI rerank service
+- an `ngrok` HTTPS tunnel
+- GitHub repository variables
+- the manual Pages refresh workflow
+
+Use:
+
+```bash
+scripts/start_online_llm_bridge.sh
+```
+
+That script:
+
+- starts the local LLM API with `qwen2.5:1.5b`
+- opens a public `ngrok` HTTPS tunnel
+- updates `LLM_API_BASE_URL`, `LLM_TIMEOUT_MS`, and `LLM_ABSTRACT_MATCH_ENABLED` in the GitHub repository
+- triggers `Manual Refresh and Deploy Journal Discovery`
+
+To turn it off again and restore the public site to lexical-only fallback:
+
+```bash
+scripts/stop_online_llm_bridge.sh
+```
+
+Important caveat: this GitHub-only bridge works only while your local machine, local API, and `ngrok` tunnel stay online.
+
 ## Local benchmark
 
 Use `./.venv/bin/python scripts/benchmark_abstract_matching.py` to run a small abstract-matching benchmark against article PDFs in `~/Documents/Disertasi/refs`.
