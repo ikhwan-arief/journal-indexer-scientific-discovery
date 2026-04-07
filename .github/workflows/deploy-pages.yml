@@ -42,6 +42,9 @@ jobs:
           LLM_API_BASE_URL: ${{ vars.LLM_API_BASE_URL }}
           LLM_TIMEOUT_MS: ${{ vars.LLM_TIMEOUT_MS }}
           LLM_ABSTRACT_MATCH_ENABLED: ${{ vars.LLM_ABSTRACT_MATCH_ENABLED }}
+          LLM_BROWSER_DIRECT_ENABLED: ${{ vars.LLM_BROWSER_DIRECT_ENABLED }}
+          LLM_BROWSER_DIRECT_DEFAULT_BASE_URL: ${{ vars.LLM_BROWSER_DIRECT_DEFAULT_BASE_URL }}
+          LLM_BROWSER_DIRECT_DEFAULT_MODEL: ${{ vars.LLM_BROWSER_DIRECT_DEFAULT_MODEL }}
         run: python scripts/update_source_data.py --scimago data/raw/scimagojr.csv --wos data/raw/scimagojr_wos.csv --sinta data/raw/sinta.csv --doaj data/raw/doaj.csv
 
       - name: Upload artifact

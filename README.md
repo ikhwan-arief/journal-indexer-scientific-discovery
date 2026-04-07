@@ -127,6 +127,28 @@ When `LLM_PROVIDER_BASE_URL` is local and `LLM_PROVIDER_TIMEOUT_SECONDS` is not 
 
 Container deployment notes for the API are in `deployment/llm_api/README.md`.
 
+## Browser-Direct LLM Mode
+
+If you only have GitHub Pages and no public API host, the app can call an OpenAI-compatible provider directly from the browser with the end user's own API key.
+
+Enable this in the GitHub Pages build by setting repository variables:
+
+- `LLM_BROWSER_DIRECT_ENABLED=true`
+- optional `LLM_BROWSER_DIRECT_DEFAULT_BASE_URL=https://api.openai.com/v1`
+- optional `LLM_BROWSER_DIRECT_DEFAULT_MODEL=gpt-4.1-mini`
+
+In this mode:
+
+- the user opens the browser-side LLM settings panel on the homepage or advanced search page
+- the user pastes their own provider base URL, model, and API key
+- abstract reranking runs directly from the browser without the FastAPI bridge
+
+Important caveats:
+
+- this works only with providers that allow browser CORS requests from the site origin
+- the API key belongs to the user and is stored only in that browser
+- this is suitable for user-supplied keys, not for embedding a shared server-side key in GitHub Pages
+
 ## GitHub-Only Online Bridge
 
 If you do not have a permanent public host for the LLM API, you can temporarily power the GitHub Pages site from your local machine by combining:

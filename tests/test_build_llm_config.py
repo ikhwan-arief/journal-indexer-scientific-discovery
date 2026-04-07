@@ -44,6 +44,7 @@ def test_home_page_omits_external_connect_src_without_llm(monkeypatch) -> None:
     monkeypatch.delenv("LLM_API_BASE_URL", raising=False)
     monkeypatch.delenv("LLM_TIMEOUT_MS", raising=False)
     monkeypatch.delenv("LLM_ABSTRACT_MATCH_ENABLED", raising=False)
+    monkeypatch.delenv("LLM_BROWSER_DIRECT_ENABLED", raising=False)
 
     html = build.home_page_html(sample_summary())
 
@@ -59,3 +60,20 @@ def test_home_page_keeps_remote_timeout_default_without_override(monkeypatch) ->
     html = build.home_page_html(sample_summary())
 
     assert 'data-llm-timeout-ms="8000"' in html
+
+
+def test_home_page_enables_browser_direct_llm_runtime(monkeypatch) -> None:
+    monkeypatch.delenv("LLM_API_BASE_URL", raising=False)
+    monkeypatch.delenv("LLM_TIMEOUT_MS", raising=False)
+    monkeypatch.delenv("LLM_ABSTRACT_MATCH_ENABLED", raising=False)
+    monkeypatch.setenv("LLM_BROWSER_DIRECT_ENABLED", "true")
+    monkeypatch.setenv("LLM_BROWSER_DIRECT_DEFAULT_BASE_URL", "https://api.openai.com/v1")
+    monkeypatch.setenv("LLM_BROWSER_DIRECT_DEFAULT_MODEL", "gpt-4.1-mini")
+
+    html = build.home_page_html(sample_summary())
+
+    assert "connect-src" in html
+    assert "https:" in html
+    assert 'data-llm-browser-direct-enabled="true"' in html
+    assert 'data-llm-browser-default-base-url="https://api.openai.com/v1"' in html
+    assert 'data-llm-browser-default-model="gpt-4.1-mini"' in html
