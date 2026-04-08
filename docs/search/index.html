@@ -10,10 +10,10 @@
     <meta name="robots" content="index,follow">
     <meta http-equiv="Content-Security-Policy" content="default-src &#x27;self&#x27;; img-src &#x27;self&#x27; data:; style-src &#x27;self&#x27;; script-src &#x27;self&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;self&#x27;; form-action &#x27;self&#x27;; frame-ancestors &#x27;none&#x27;">
     
-    <link rel="stylesheet" href="../assets/styles.css?v=2026-04-07+23%3A28+UTC">
-    <script defer src="../assets/app.js?v=2026-04-07+23%3A28+UTC"></script>
+    <link rel="stylesheet" href="../assets/styles.css?v=2026-04-08+22%3A39+UTC">
+    <script defer src="../assets/app.js?v=2026-04-08+22%3A39+UTC"></script>
   </head>
-  <body data-page="search" data-site-root=".." data-data-url="../data/search-manifest.json?v=2026-04-07+23%3A28+UTC" data-llm-abstract-enabled="false" data-llm-api-base-url="" data-llm-timeout-ms="8000" data-llm-candidate-limit="50" data-llm-browser-direct-enabled="false" data-llm-browser-default-base-url="" data-llm-browser-default-model="">
+  <body data-page="search" data-site-root=".." data-data-url="../data/search-manifest.json?v=2026-04-08+22%3A39+UTC" data-llm-abstract-enabled="false" data-llm-api-base-url="" data-llm-timeout-ms="8000" data-llm-candidate-limit="50">
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
       <div class="shell">
@@ -34,38 +34,7 @@
             <div class="hero-content">
               <h1>Search journal profiles by abstract, keyword, title, publisher, or URL.</h1>
               <p class="hero-copy">Use abstract matching for recommendations, or switch scope and filters for a more precise search across journal metadata, accreditation, and indexing status.</p>
-              <p class="llm-privacy-note" id="llm-privacy-note" hidden>When LLM-assisted ranking is enabled, submitted abstracts are sent either to the configured inference API or directly from your browser to your chosen provider for topical reranking.</p>
-              <details class="llm-provider-panel" id="llm-browser-settings" hidden>
-                  <summary>Use your own LLM provider in this browser</summary>
-                  <div class="llm-provider-grid">
-                    <label class="llm-provider-toggle" for="llm-browser-direct-enabled">
-                      <input type="checkbox" id="llm-browser-direct-enabled">
-                      <span>Send abstracts directly from this browser to my OpenAI-compatible provider.</span>
-                    </label>
-                    <div class="field">
-                      <label for="llm-provider-base-url">Provider base URL</label>
-                      <input id="llm-provider-base-url" type="url" inputmode="url" autocomplete="url" placeholder="https://api.openai.com/v1">
-                    </div>
-                    <div class="field">
-                      <label for="llm-provider-model">Model</label>
-                      <input id="llm-provider-model" type="text" autocomplete="off" spellcheck="false" placeholder="gpt-4.1-mini">
-                    </div>
-                    <div class="field">
-                      <label for="llm-provider-api-key">API key</label>
-                      <input id="llm-provider-api-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste your own API key">
-                    </div>
-                    <label class="llm-provider-remember" for="llm-provider-remember-key">
-                      <input type="checkbox" id="llm-provider-remember-key">
-                      <span>Remember API key on this browser</span>
-                    </label>
-                    <p class="llm-provider-help">The key stays in this browser only. Your provider must accept cross-origin browser requests from this site.</p>
-                    <div class="hero-actions llm-provider-actions">
-                      <button type="button" class="button button-secondary" id="llm-provider-apply">Save browser settings</button>
-                      <button type="button" class="button button-secondary" id="llm-provider-clear">Clear browser settings</button>
-                    </div>
-                    <p class="llm-provider-status" id="llm-provider-status"></p>
-                  </div>
-                </details>
+              <p class="llm-privacy-note" id="llm-privacy-note" hidden>When LLM-assisted ranking is enabled, submitted abstracts are sent to the configured inference API for topical reranking.</p>
             </div>
           </div>
         </div>

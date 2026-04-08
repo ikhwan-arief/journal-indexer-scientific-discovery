@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: journal-discovery-llm-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./deployment/llm_api/Dockerfile
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: LLM_PROVIDER_KIND
+        value: openai_compatible
+      - key: LLM_PROVIDER_BASE_URL
+        sync: false
+      - key: LLM_PROVIDER_API_KEY
+        sync: false
+      - key: LLM_PROVIDER_MODEL
+        sync: false
+      - key: LLM_CORS_ORIGINS
+        value: https://ikhwan-arief.github.io
+      - key: LLM_API_ENABLE_DOCS
+        value: false

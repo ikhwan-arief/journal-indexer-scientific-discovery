@@ -148,38 +148,6 @@ def configure_llm_runtime(page, llm_url: str, candidate_depth: int = 5, timeout_
     )
 
 
-def configure_browser_direct_llm_runtime(
-    page,
-    provider_url: str,
-    model: str = "mock-browser-model",
-    api_key: str = "test-key",
-    candidate_depth: int = 5,
-    timeout_ms: int = 5000,
-) -> None:
-    config = json.dumps(
-        {
-            "llmApiBaseUrl": "",
-            "llmTimeoutMs": timeout_ms,
-            "llmAbstractEnabled": False,
-            "llmCandidateLimit": candidate_depth,
-            "llmBrowserDirectEnabled": True,
-            "llmBrowserDirectBaseUrl": provider_url,
-            "llmBrowserDirectModel": model,
-            "llmBrowserDirectApiKey": api_key,
-            "llmBrowserDirectActive": True,
-            "llmBrowserDirectRememberKey": False,
-        }
-    )
-    page.add_init_script(
-        script=f"""
-            window.__JD_RUNTIME_CONFIG__ = {{
-                ...(window.__JD_RUNTIME_CONFIG__ || {{}}),
-                ...{config}
-            }};
-        """
-    )
-
-
 def disable_llm_runtime(page) -> None:
     config = json.dumps(
         {
@@ -187,7 +155,6 @@ def disable_llm_runtime(page) -> None:
             "llmTimeoutMs": 5000,
             "llmAbstractEnabled": False,
             "llmCandidateLimit": 50,
-            "llmBrowserDirectEnabled": False,
         }
     )
     page.add_init_script(
@@ -246,56 +213,6 @@ def fulfill_mock_llm_route(route, recorded_requests: list[dict[str, object]], mo
                 "model": "mock-llm",
                 "latency_ms": 12,
                 "ranked": ranked,
-            }
-        ),
-    )
-
-
-def fulfill_mock_browser_provider_route(route, recorded_requests: list[dict[str, object]], mode: str) -> None:
-    payload = json.loads(route.request.post_data or "{}")
-    recorded_requests.append(
-        {
-            "path": urlparse(route.request.url).path,
-            "payload": payload,
-        }
-    )
-
-    if mode == "error":
-        route.fulfill(
-            status=401,
-            content_type="application/json",
-            body=json.dumps({"error": {"message": "Mock browser provider rejected the request."}}),
-        )
-        return
-
-    messages = payload.get("messages", [])
-    user_message = next((item for item in messages if item.get("role") == "user"), {})
-    prompt_payload = json.loads(user_message.get("content") or "{}")
-    candidates = list(prompt_payload.get("candidates", []))
-    results = []
-    for index, candidate in enumerate(reversed(candidates), start=1):
-        results.append(
-            {
-                "sourceid": str(candidate.get("sourceid") or ""),
-                "llm_score": max(0, 100 - index),
-                "rationale": f"{candidate.get('title') or 'This journal'} aligns with the abstract scope.",
-                "matched_fields": ["title", "areas"],
-                "confidence": 0.79,
-            }
-        )
-
-    route.fulfill(
-        status=200,
-        content_type="application/json",
-        body=json.dumps(
-            {
-                "choices": [
-                    {
-                        "message": {
-                            "content": json.dumps({"results": results}),
-                        }
-                    }
-                ]
             }
         ),
     )
@@ -608,38 +525,6 @@ def main() -> int:
             raise AssertionError(f"Expected lexical fallback status for short abstract queries, got: {short_status_text}")
         if len(llm_success_requests) != before_short_requests:
             raise AssertionError("Expected short abstract queries to skip the LLM API.")
-
-        browser_direct_page = new_smoke_page(browser)
-        browser_direct_requests: list[dict[str, object]] = []
-        configure_browser_direct_llm_runtime(browser_direct_page, base_url, candidate_depth=5)
-        browser_direct_page.route("**/v1/chat/completions", lambda route: fulfill_mock_browser_provider_route(route, browser_direct_requests, "success"))
-        browser_direct_page.goto(f"{base_url}/search/", wait_until="networkidle")
-        browser_direct_page.wait_for_selector("#search-form")
-        if browser_direct_page.locator("#llm-browser-settings").count() != 1 or browser_direct_page.locator("#llm-browser-settings").is_hidden():
-            raise AssertionError("Expected browser-direct LLM panel to be visible when the runtime config enables it.")
-        submit_search(browser_direct_page, LONG_ABSTRACT_FIT_QUERY, scope="abstract")
-        browser_direct_page.wait_for_selector(".llm-insight", timeout=20000)
-        browser_status_text = browser_direct_page.locator("#ranking-status").inner_text()
-        if "LLM-assisted ranking" not in browser_status_text:
-            raise AssertionError(f"Expected browser-direct LLM success status, got: {browser_status_text}")
-        browser_first_title = browser_direct_page.locator(".search-card h3 a").first.inner_text().strip()
-        if browser_first_title == long_lexical_first_title:
-            raise AssertionError("Expected browser-direct rerank to reorder the first result relative to lexical ranking.")
-        if not browser_direct_requests:
-            raise AssertionError("Expected browser-direct LLM rerank to call the mock provider endpoint.")
-
-        browser_direct_fallback_page = new_smoke_page(browser)
-        browser_direct_error_requests: list[dict[str, object]] = []
-        configure_browser_direct_llm_runtime(browser_direct_fallback_page, base_url, candidate_depth=5)
-        browser_direct_fallback_page.route("**/v1/chat/completions", lambda route: fulfill_mock_browser_provider_route(route, browser_direct_error_requests, "error"))
-        browser_direct_fallback_page.goto(f"{base_url}/search/", wait_until="networkidle")
-        browser_direct_fallback_page.wait_for_selector("#search-form")
-        submit_search(browser_direct_fallback_page, LONG_ABSTRACT_FIT_QUERY, scope="abstract")
-        browser_fallback_status = browser_direct_fallback_page.locator("#ranking-status").inner_text()
-        if "Lexical fallback" not in browser_fallback_status:
-            raise AssertionError(f"Expected browser-direct provider errors to fall back lexically, got: {browser_fallback_status}")
-        if not browser_direct_error_requests:
-            raise AssertionError("Expected browser-direct fallback flow to still attempt the mock provider request.")
 
         merged_title_page = new_smoke_page(browser)
         merged_title_page.goto(f"{base_url}/search/", wait_until="networkidle")

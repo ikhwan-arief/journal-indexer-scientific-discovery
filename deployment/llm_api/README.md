@@ -39,3 +39,30 @@ docker run -d \
 Point the frontend build variable `LLM_API_BASE_URL` to this service root, for example `https://api.example.com`.
 
 For local Ollama testing, `qwen2.5:1.5b` is a good starting point for the full 50-candidate rerank workload.
+
+## Render deployment
+
+This repository now includes a root-level `render.yaml` for a Docker-based Render Web Service.
+
+Service settings:
+
+- Dockerfile: `deployment/llm_api/Dockerfile`
+- Health check: `/healthz`
+- Runtime port: `PORT` from Render, defaulting to `10000`
+
+Set these environment variables in Render:
+
+- `LLM_PROVIDER_KIND=openai_compatible`
+- `LLM_PROVIDER_BASE_URL=https://your-provider.example/v1`
+- `LLM_PROVIDER_API_KEY=...`
+- `LLM_PROVIDER_MODEL=...`
+
+The blueprint also sets:
+
+- `LLM_CORS_ORIGINS=https://ikhwan-arief.github.io`
+- `LLM_API_ENABLE_DOCS=false`
+
+After Render gives you a public URL such as `https://journal-discovery-llm-api.onrender.com`, point the GitHub Pages build to that URL through:
+
+- `LLM_API_BASE_URL=https://your-render-service.onrender.com`
+- `LLM_ABSTRACT_MATCH_ENABLED=true`

@@ -127,27 +127,26 @@ When `LLM_PROVIDER_BASE_URL` is local and `LLM_PROVIDER_TIMEOUT_SECONDS` is not 
 
 Container deployment notes for the API are in `deployment/llm_api/README.md`.
 
-## Browser-Direct LLM Mode
+## Render Deployment
 
-If you only have GitHub Pages and no public API host, the app can call an OpenAI-compatible provider directly from the browser with the end user's own API key.
+If you have a Render account, that is the recommended way to run the LLM API for a public deployment.
 
-Enable this in the GitHub Pages build by setting repository variables:
+The repo now includes `render.yaml` plus a Render-ready Dockerfile for the LLM API:
 
-- `LLM_BROWSER_DIRECT_ENABLED=true`
-- optional `LLM_BROWSER_DIRECT_DEFAULT_BASE_URL=https://api.openai.com/v1`
-- optional `LLM_BROWSER_DIRECT_DEFAULT_MODEL=gpt-4.1-mini`
+- [render.yaml](/Users/ikhwanarief/Documents/GitHub%20Repositories/Journal_Discovery/render.yaml)
+- [Dockerfile](/Users/ikhwanarief/Documents/GitHub%20Repositories/Journal_Discovery/deployment/llm_api/Dockerfile)
 
-In this mode:
+High-level flow:
 
-- the user opens the browser-side LLM settings panel on the homepage or advanced search page
-- the user pastes their own provider base URL, model, and API key
-- abstract reranking runs directly from the browser without the FastAPI bridge
+1. Create a Render Web Service from this repository.
+2. Let Render read `render.yaml`.
+3. Fill in `LLM_PROVIDER_BASE_URL`, `LLM_PROVIDER_API_KEY`, and `LLM_PROVIDER_MODEL` in Render.
+4. After Render gives you a public `onrender.com` URL, set GitHub repo variables:
+   - `LLM_API_BASE_URL=https://your-service.onrender.com`
+   - `LLM_ABSTRACT_MATCH_ENABLED=true`
+5. Trigger a Pages deploy.
 
-Important caveats:
-
-- this works only with providers that allow browser CORS requests from the site origin
-- the API key belongs to the user and is stored only in that browser
-- this is suitable for user-supplied keys, not for embedding a shared server-side key in GitHub Pages
+This keeps the API key server-side on Render and removes the need for user-supplied browser keys.
 
 ## GitHub-Only Online Bridge
 

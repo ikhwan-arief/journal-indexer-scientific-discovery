@@ -83,13 +83,6 @@ const DEFAULT_LLM_TIMEOUT_MS = 8000;
 const LLM_ABSTRACT_MIN_CHARS = 200;
 const LLM_ABSTRACT_MIN_MEANINGFUL_TOKENS = 15;
 const LLM_RERANK_CANDIDATE_LIMIT = 50;
-const LLM_QUERY_CHAR_LIMIT = 3000;
-const LLM_TITLE_CHAR_LIMIT = 240;
-const LLM_CATEGORY_CHAR_LIMIT = 480;
-const LLM_AREA_CHAR_LIMIT = 420;
-const LLM_SUBJECT_AREA_CHAR_LIMIT = 240;
-const LLM_PROVIDER_STORAGE_PREFIX = "jd.llmBrowserDirect";
-const LLM_PROVIDER_ALLOWED_MATCHED_FIELDS = new Set(["title", "categories", "areas", "subject_area"]);
 const ABSTRACT_LOW_SIGNAL_TERMS = [
   "study", "work", "research", "result", "method", "analysis", "data", "model", "system", "approach",
   "performance", "program", "strategy", "design", "evaluation", "practice", "management", "policy",
@@ -487,109 +480,6 @@ function trimTrailingSlashes(value) {
   return String(value || "").trim().replace(/\/+$/, "");
 }
 
-function compactWhitespace(value) {
-  return String(value || "").split(/\s+/).filter(Boolean).join(" ");
-}
-
-function truncateCompactText(value, limit) {
-  const compact = compactWhitespace(value);
-  if (!compact || compact.length <= limit) {
-    return compact;
-  }
-  return `${compact.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
-}
-
-function clampInteger(value, minimum, maximum, fallback) {
-  const parsed = Number.parseInt(String(value ?? "").trim(), 10);
-  if (!Number.isFinite(parsed)) {
-    return fallback;
-  }
-  return Math.max(minimum, Math.min(maximum, parsed));
-}
-
-function clampFloat(value, minimum, maximum, fallback) {
-  const parsed = Number.parseFloat(String(value ?? "").trim());
-  if (!Number.isFinite(parsed)) {
-    return fallback;
-  }
-  return Math.max(minimum, Math.min(maximum, parsed));
-}
-
-function compactSentence(value) {
-  let compact = compactWhitespace(value);
-  if (!compact) {
-    return "";
-  }
-  if (compact.length > 220) {
-    compact = `${compact.slice(0, 219).trimEnd()}…`;
-  }
-  if (!/[.!?]$/.test(compact)) {
-    compact += ".";
-  }
-  return compact;
-}
-
-function normalizeMatchedFields(value) {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  const matches = [];
-  for (const item of value) {
-    const field = String(item || "").trim().toLowerCase();
-    if (LLM_PROVIDER_ALLOWED_MATCHED_FIELDS.has(field) && !matches.includes(field)) {
-      matches.push(field);
-    }
-  }
-  return matches;
-}
-
-function readStorageValue(storage, key) {
-  try {
-    return storage?.getItem(key) || "";
-  } catch (error) {
-    void error;
-    return "";
-  }
-}
-
-function writeStorageValue(storage, key, value) {
-  try {
-    if (!storage) {
-      return;
-    }
-    const text = String(value || "");
-    if (text) {
-      storage.setItem(key, text);
-    } else {
-      storage.removeItem(key);
-    }
-  } catch (error) {
-    void error;
-  }
-}
-
-function deleteStorageValue(storage, key) {
-  try {
-    storage?.removeItem(key);
-  } catch (error) {
-    void error;
-  }
-}
-
-function llmProviderEndpoint(baseUrl) {
-  const trimmed = trimTrailingSlashes(baseUrl);
-  if (!trimmed) {
-    return "";
-  }
-  if (trimmed.endsWith("/v1/chat/completions") || trimmed.endsWith("/chat/completions")) {
-    return trimmed;
-  }
-  if (trimmed.endsWith("/v1")) {
-    return `${trimmed}/chat/completions`;
-  }
-  return `${trimmed}/v1/chat/completions`;
-}
-
 function llmAbstractEndpoint(baseUrl) {
   const trimmed = trimTrailingSlashes(baseUrl);
   if (!trimmed) {
@@ -602,59 +492,6 @@ function llmAbstractEndpoint(baseUrl) {
     return `${trimmed}/abstract-match`;
   }
   return `${trimmed}/v1/abstract-match`;
-}
-
-function readStoredLlmBrowserSettings(runtimeConfig) {
-  const override = window.__JD_RUNTIME_CONFIG__ || {};
-  const rememberKey = normalizeBoolean(
-    override.llmBrowserDirectRememberKey,
-    normalizeBoolean(readStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.rememberKey`), false)
-  );
-  const localApiKey = readStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.apiKey`);
-  const sessionApiKey = readStorageValue(window.sessionStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.apiKey`);
-  const defaultBaseUrl = trimTrailingSlashes(runtimeConfig.llmBrowserDefaultBaseUrl || "");
-  const defaultModel = String(runtimeConfig.llmBrowserDefaultModel || "").trim();
-  return {
-    enabled: normalizeBoolean(
-      override.llmBrowserDirectActive,
-      normalizeBoolean(readStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.enabled`), false)
-    ),
-    baseUrl: trimTrailingSlashes(
-      override.llmBrowserDirectBaseUrl
-      || readStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.baseUrl`)
-      || defaultBaseUrl
-    ),
-    model: String(
-      override.llmBrowserDirectModel
-      || readStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.model`)
-      || defaultModel
-    ).trim(),
-    apiKey: String(override.llmBrowserDirectApiKey || (rememberKey ? localApiKey : sessionApiKey || localApiKey) || "").trim(),
-    rememberKey,
-  };
-}
-
-function persistLlmBrowserSettings(settings) {
-  writeStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.enabled`, settings.enabled ? "true" : "false");
-  writeStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.baseUrl`, trimTrailingSlashes(settings.baseUrl || ""));
-  writeStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.model`, String(settings.model || "").trim());
-  writeStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.rememberKey`, settings.rememberKey ? "true" : "false");
-  if (settings.rememberKey) {
-    writeStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.apiKey`, String(settings.apiKey || "").trim());
-    deleteStorageValue(window.sessionStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.apiKey`);
-  } else {
-    writeStorageValue(window.sessionStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.apiKey`, String(settings.apiKey || "").trim());
-    deleteStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.apiKey`);
-  }
-}
-
-function clearPersistedLlmBrowserSettings() {
-  deleteStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.enabled`);
-  deleteStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.baseUrl`);
-  deleteStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.model`);
-  deleteStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.rememberKey`);
-  deleteStorageValue(window.localStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.apiKey`);
-  deleteStorageValue(window.sessionStorage, `${LLM_PROVIDER_STORAGE_PREFIX}.apiKey`);
 }
 
 function readRuntimeConfig(body) {
@@ -684,142 +521,7 @@ function readRuntimeConfig(body) {
     llmAbstractEnabled: enabled,
     llmTimeoutMs: timeoutMs,
     llmCandidateLimit,
-    llmBrowserDirectEnabled: normalizeBoolean(
-      override.llmBrowserDirectEnabled,
-      normalizeBoolean(body.dataset.llmBrowserDirectEnabled, false)
-    ),
-    llmBrowserDefaultBaseUrl: trimTrailingSlashes(
-      override.llmBrowserDefaultBaseUrl || body.dataset.llmBrowserDefaultBaseUrl || ""
-    ),
-    llmBrowserDefaultModel: String(
-      override.llmBrowserDefaultModel || body.dataset.llmBrowserDefaultModel || ""
-    ).trim(),
   };
-}
-
-function hasCompleteLlmBrowserSettings(settings) {
-  return Boolean(
-    settings
-    && settings.enabled
-    && trimTrailingSlashes(settings.baseUrl || "")
-    && String(settings.model || "").trim()
-    && String(settings.apiKey || "").trim()
-  );
-}
-
-function buildBrowserPromptPayload(queryText, candidates) {
-  return {
-    task: "Score journal submission fit for an abstract using only topical and scope evidence.",
-    query_text: truncateCompactText(queryText, LLM_QUERY_CHAR_LIMIT),
-    instructions: [
-      "Use only title, categories, areas, and subject_area as evidence.",
-      "Ignore prestige, rankings, indexing, accreditation, APC, and publisher reputation.",
-      "Use lexical_score only as a tie-break when two journals appear equally aligned.",
-      "Return concise one-sentence rationales.",
-    ],
-    candidates: candidates.map((candidate) => ({
-      sourceid: String(candidate.sourceid || ""),
-      title: truncateCompactText(candidate.title, LLM_TITLE_CHAR_LIMIT),
-      categories: truncateCompactText(candidate.categories, LLM_CATEGORY_CHAR_LIMIT),
-      areas: truncateCompactText(candidate.areas, LLM_AREA_CHAR_LIMIT),
-      subject_area: truncateCompactText(candidate.subject_area, LLM_SUBJECT_AREA_CHAR_LIMIT),
-      lexical_score: Number(candidate.lexical_score || 0).toFixed(4),
-    })),
-    response_schema: {
-      results: [
-        {
-          sourceid: "candidate sourceid",
-          llm_score: "integer 0-100",
-          rationale: "one short sentence",
-          matched_fields: ["title", "categories", "areas", "subject_area"],
-          confidence: "float 0.0-1.0",
-        },
-      ],
-    },
-  };
-}
-
-function extractProviderMessageContent(payload) {
-  const choices = Array.isArray(payload?.choices) ? payload.choices : [];
-  if (!choices.length || typeof choices[0] !== "object" || !choices[0]) {
-    return "";
-  }
-  const message = choices[0].message;
-  if (!message || typeof message !== "object") {
-    return "";
-  }
-  if (typeof message.content === "string") {
-    return message.content;
-  }
-  if (Array.isArray(message.content)) {
-    return message.content
-      .map((item) => (item && typeof item === "object" && item.type === "text" ? String(item.text || "") : ""))
-      .join("");
-  }
-  return "";
-}
-
-function normalizeBrowserProviderOutput(rawContent, candidates) {
-  const candidateMap = new Map(
-    candidates.map((candidate) => [
-      String(candidate.sourceid || ""),
-      {
-        sourceid: String(candidate.sourceid || ""),
-        title: String(candidate.title || ""),
-        lexical_score: Number(candidate.lexical_score || 0),
-        llm_score: 0,
-        rationale: "",
-        matched_fields: [],
-        confidence: 0,
-      },
-    ])
-  );
-
-  let payload = null;
-  try {
-    payload = JSON.parse(String(rawContent || ""));
-  } catch (error) {
-    return Array.from(candidateMap.values());
-  }
-
-  const results = Array.isArray(payload?.results) ? payload.results : [];
-  for (const item of results) {
-    if (!item || typeof item !== "object") {
-      continue;
-    }
-    const sourceid = String(item.sourceid || "").trim();
-    if (!sourceid || !candidateMap.has(sourceid)) {
-      continue;
-    }
-    const current = candidateMap.get(sourceid);
-    candidateMap.set(sourceid, {
-      sourceid: current.sourceid,
-      title: current.title,
-      lexical_score: current.lexical_score,
-      llm_score: clampInteger(item.llm_score, 0, 100, 0),
-      rationale: compactSentence(item.rationale),
-      matched_fields: normalizeMatchedFields(item.matched_fields),
-      confidence: clampFloat(item.confidence, 0, 1, 0),
-    });
-  }
-
-  return Array.from(candidateMap.values());
-}
-
-function sortProviderScoredCandidates(candidates) {
-  return [...candidates].sort((left, right) => {
-    if (right.llm_score !== left.llm_score) {
-      return right.llm_score - left.llm_score;
-    }
-    if (right.lexical_score !== left.lexical_score) {
-      return right.lexical_score - left.lexical_score;
-    }
-    const titleGap = String(left.title || "").localeCompare(String(right.title || ""), "en", { sensitivity: "base" });
-    if (titleGap !== 0) {
-      return titleGap;
-    }
-    return String(left.sourceid || "").localeCompare(String(right.sourceid || ""), "en", { sensitivity: "base" });
-  });
 }
 
 function blurPaginationFocus() {
@@ -1735,15 +1437,6 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
   const countrySelect = document.querySelector("#country-filter");
   const sortSelect = document.querySelector("#sort-order");
   const privacyNote = document.querySelector("#llm-privacy-note");
-  const llmBrowserPanel = document.querySelector("#llm-browser-settings");
-  const llmBrowserToggle = document.querySelector("#llm-browser-direct-enabled");
-  const llmProviderBaseUrlInput = document.querySelector("#llm-provider-base-url");
-  const llmProviderModelInput = document.querySelector("#llm-provider-model");
-  const llmProviderApiKeyInput = document.querySelector("#llm-provider-api-key");
-  const llmProviderRememberInput = document.querySelector("#llm-provider-remember-key");
-  const llmProviderApplyButton = document.querySelector("#llm-provider-apply");
-  const llmProviderClearButton = document.querySelector("#llm-provider-clear");
-  const llmProviderStatus = document.querySelector("#llm-provider-status");
 
   if (!form || !results || !resultsCount || !queryInput || !scopeField) {
     return;
@@ -1773,34 +1466,8 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     resultsSummary.textContent = `${totalProfiles} journal profiles ready`;
   }
 
-  const initialLlmBrowserSettings = readStoredLlmBrowserSettings(runtimeConfig);
-
   if (privacyNote) {
-    privacyNote.hidden = !(runtimeConfig.llmAbstractEnabled || runtimeConfig.llmBrowserDirectEnabled);
-  }
-
-  if (llmBrowserPanel) {
-    llmBrowserPanel.hidden = !runtimeConfig.llmBrowserDirectEnabled;
-    llmBrowserPanel.open = Boolean(
-      runtimeConfig.llmBrowserDirectEnabled
-      && (!runtimeConfig.llmAbstractEnabled || initialLlmBrowserSettings.enabled || initialLlmBrowserSettings.baseUrl || initialLlmBrowserSettings.model)
-    );
-  }
-
-  if (llmBrowserToggle) {
-    llmBrowserToggle.checked = Boolean(initialLlmBrowserSettings.enabled);
-  }
-  if (llmProviderBaseUrlInput) {
-    llmProviderBaseUrlInput.value = initialLlmBrowserSettings.baseUrl;
-  }
-  if (llmProviderModelInput) {
-    llmProviderModelInput.value = initialLlmBrowserSettings.model;
-  }
-  if (llmProviderApiKeyInput) {
-    llmProviderApiKeyInput.value = initialLlmBrowserSettings.apiKey;
-  }
-  if (llmProviderRememberInput) {
-    llmProviderRememberInput.checked = Boolean(initialLlmBrowserSettings.rememberKey);
+    privacyNote.hidden = !runtimeConfig.llmAbstractEnabled;
   }
 
   if (countrySelect) {
@@ -1824,81 +1491,9 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     scopeField.value = "abstract";
   }
   page = Math.max(1, Number.parseInt(params.get("page") || "1", 10) || 1);
-  updateLlmBrowserPanelStatus();
 
   function currentScope() {
     return scopeField.value || (pageMode === "home" ? "abstract" : "all");
-  }
-
-  function readCurrentLlmBrowserSettings() {
-    return {
-      enabled: Boolean(llmBrowserToggle?.checked),
-      baseUrl: trimTrailingSlashes(llmProviderBaseUrlInput?.value || ""),
-      model: String(llmProviderModelInput?.value || "").trim(),
-      apiKey: String(llmProviderApiKeyInput?.value || "").trim(),
-      rememberKey: Boolean(llmProviderRememberInput?.checked),
-    };
-  }
-
-  function applyLlmBrowserStatus(message, tone = "muted") {
-    if (!llmProviderStatus) {
-      return;
-    }
-    llmProviderStatus.textContent = message;
-    llmProviderStatus.dataset.tone = tone;
-  }
-
-  function updateLlmBrowserPanelStatus() {
-    if (!runtimeConfig.llmBrowserDirectEnabled) {
-      return;
-    }
-    const settings = readCurrentLlmBrowserSettings();
-    if (!settings.enabled) {
-      if (runtimeConfig.llmAbstractEnabled && runtimeConfig.llmApiBaseUrl) {
-        applyLlmBrowserStatus("This build will use the configured LLM API unless you enable browser-side settings.", "muted");
-      } else {
-        applyLlmBrowserStatus("Browser-side LLM is off. Enable it and enter your provider settings to rerank abstracts.", "muted");
-      }
-      return;
-    }
-    if (!trimTrailingSlashes(settings.baseUrl || "")) {
-      applyLlmBrowserStatus("Enter a provider base URL such as https://api.openai.com/v1.", "warn");
-      return;
-    }
-    if (!String(settings.model || "").trim()) {
-      applyLlmBrowserStatus("Enter the model name exposed by your provider.", "warn");
-      return;
-    }
-    if (!String(settings.apiKey || "").trim()) {
-      applyLlmBrowserStatus("Paste your own API key to enable browser-side reranking.", "warn");
-      return;
-    }
-    applyLlmBrowserStatus("Browser-side LLM is ready. Abstracts and your API key will be sent directly to the provider from this browser.", "ready");
-  }
-
-  function currentLlmConfig() {
-    const browserSettings = readCurrentLlmBrowserSettings();
-    if (runtimeConfig.llmBrowserDirectEnabled && hasCompleteLlmBrowserSettings(browserSettings)) {
-      return {
-        mode: "browser",
-        baseUrl: browserSettings.baseUrl,
-        endpoint: llmProviderEndpoint(browserSettings.baseUrl),
-        model: browserSettings.model,
-        apiKey: browserSettings.apiKey,
-        timeoutMs: runtimeConfig.llmTimeoutMs,
-        candidateLimit: runtimeConfig.llmCandidateLimit,
-      };
-    }
-    if (runtimeConfig.llmAbstractEnabled && runtimeConfig.llmApiBaseUrl) {
-      return {
-        mode: "api",
-        baseUrl: runtimeConfig.llmApiBaseUrl,
-        endpoint: llmAbstractEndpoint(runtimeConfig.llmApiBaseUrl),
-        timeoutMs: runtimeConfig.llmTimeoutMs,
-        candidateLimit: runtimeConfig.llmCandidateLimit,
-      };
-    }
-    return null;
   }
 
   function currentStateKey(state) {
@@ -1910,11 +1505,10 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       quartile: state.quartileFilter,
       country: state.countryFilter,
       sort: state.sortOrder,
-      llmMode: state.llmConfig?.mode || "",
-      llmBaseUrl: state.llmConfig?.baseUrl || "",
-      llmModel: state.llmConfig?.model || "",
-      llmTimeoutMs: state.llmConfig?.timeoutMs || runtimeConfig.llmTimeoutMs,
-      llmCandidateLimit: state.llmConfig?.candidateLimit || runtimeConfig.llmCandidateLimit,
+      llmApi: runtimeConfig.llmApiBaseUrl,
+      llmEnabled: runtimeConfig.llmAbstractEnabled,
+      llmTimeoutMs: runtimeConfig.llmTimeoutMs,
+      llmCandidateLimit: runtimeConfig.llmCandidateLimit,
       versionTag,
     });
   }
@@ -1977,7 +1571,6 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     const countryFilter = countrySelect?.value || "all";
     const sortOrder = alignSortWithScope(scope);
     const hasFilters = indexFilter !== "all" || accreditationFilter !== "all" || quartileFilter !== "all" || countryFilter !== "all";
-    const llmConfig = currentLlmConfig();
 
     return {
       scope,
@@ -1987,7 +1580,6 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       quartileFilter,
       countryFilter,
       sortOrder,
-      llmConfig,
       hasFilters,
       shouldLoad: hasFilters || query.shouldLoad,
       shouldShowPrompt: !hasFilters && !query.hasRawQuery,
@@ -2010,17 +1602,11 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     if (state.sortOrder === "fit_desc") {
       return lexicalFallbackStatus("Highest abstract fit keeps ranking local and deterministic.");
     }
-    if (!state.llmConfig) {
-      if (runtimeConfig.llmBrowserDirectEnabled) {
-        return lexicalFallbackStatus("Configure browser-side LLM settings or use the local scorer.");
-      }
+    if (!runtimeConfig.llmAbstractEnabled || !runtimeConfig.llmApiBaseUrl) {
       return lexicalFallbackStatus("LLM API is not configured for this build.");
     }
     if (state.query.rawLength < LLM_ABSTRACT_MIN_CHARS || state.query.meaningfulTokenCount < LLM_ABSTRACT_MIN_MEANINGFUL_TOKENS) {
       return lexicalFallbackStatus(`Abstracts shorter than ${LLM_ABSTRACT_MIN_CHARS} characters or below ${LLM_ABSTRACT_MIN_MEANINGFUL_TOKENS} meaningful tokens use the local scorer.`);
-    }
-    if (state.llmConfig.mode === "browser") {
-      return lexicalFallbackStatus("The local scorer is active while your browser-side LLM shortlist is prepared.");
     }
     return lexicalFallbackStatus("The local scorer is active while the shortlist is prepared.");
   }
@@ -2031,18 +1617,16 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       && state.sortOrder === "default"
       && state.query.shouldLoad
       && state.query.hasRawQuery
-      && Boolean(state.llmConfig)
+      && runtimeConfig.llmAbstractEnabled
+      && Boolean(runtimeConfig.llmApiBaseUrl)
       && state.query.rawLength >= LLM_ABSTRACT_MIN_CHARS
       && state.query.meaningfulTokenCount >= LLM_ABSTRACT_MIN_MEANINGFUL_TOKENS
     );
   }
 
-  function llmErrorDetail(error, llmConfig, fallbackReason = "The LLM API could not be reached.") {
+  function llmErrorDetail(error, fallbackReason = "The LLM API could not be reached.") {
     if (error?.name === "AbortError") {
       return "The LLM API timed out, so the local scorer was used.";
-    }
-    if (llmConfig?.mode === "browser" && error?.name === "TypeError") {
-      return "The browser could not reach the provider. Check the base URL, API key, and provider CORS policy.";
     }
     const message = String(error?.message || fallbackReason).trim();
     if (!message) {
@@ -2051,7 +1635,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     return message;
   }
 
-  async function requestApiAbstractRerank(llmConfig, state, topEntries, controller) {
+  async function requestApiAbstractRerank(state, topEntries, controller) {
     const payload = {
       query_text: state.query.trimmedRaw,
       top_n: topEntries.length,
@@ -2067,7 +1651,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       })),
     };
 
-    const response = await fetch(llmConfig.endpoint, {
+    const response = await fetch(llmAbstractEndpoint(runtimeConfig.llmApiBaseUrl), {
       method: "POST",
       credentials: "omit",
       headers: {
@@ -2093,81 +1677,6 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     return response.json();
   }
 
-  async function requestBrowserDirectRerank(llmConfig, state, topEntries, controller) {
-    const promptPayload = buildBrowserPromptPayload(
-      state.query.trimmedRaw,
-      topEntries.map((entry) => ({
-        sourceid: entry.record.sourceid,
-        title: entry.record.title,
-        categories: entry.record.categories,
-        areas: entry.record.areas,
-        subject_area: entry.record.subject_area,
-        lexical_score: entry.score,
-      }))
-    );
-
-    const response = await fetch(llmConfig.endpoint, {
-      method: "POST",
-      credentials: "omit",
-      headers: {
-        "Authorization": `Bearer ${llmConfig.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: llmConfig.model,
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content: "You score manuscript abstract fit to journal scope. Return JSON only with a top-level 'results' array keyed by sourceid.",
-          },
-          {
-            role: "user",
-            content: JSON.stringify(promptPayload),
-          },
-        ],
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      let detail = `The provider returned status ${response.status}.`;
-      try {
-        const errorPayload = await response.json();
-        const providerMessage = errorPayload?.error?.message || errorPayload?.detail;
-        if (providerMessage) {
-          detail = String(providerMessage);
-        }
-      } catch (error) {
-        void error;
-      }
-      throw new Error(detail);
-    }
-
-    const providerPayload = await response.json();
-    const normalized = normalizeBrowserProviderOutput(
-      extractProviderMessageContent(providerPayload),
-      topEntries.map((entry) => ({
-        sourceid: entry.record.sourceid,
-        title: entry.record.title,
-        lexical_score: entry.score,
-      }))
-    );
-    const ranked = sortProviderScoredCandidates(normalized).map((item, index) => ({
-      sourceid: item.sourceid,
-      rank: index + 1,
-      llm_score: item.llm_score,
-      rationale: item.rationale,
-      matched_fields: item.matched_fields,
-      confidence: item.confidence,
-    }));
-    return {
-      model: llmConfig.model,
-      ranked,
-    };
-  }
-
   async function rerankAbstractEntries(state, lexicalEntries) {
     const stateKey = currentStateKey(state);
     if (llmRerankCache.has(stateKey)) {
@@ -2177,15 +1686,13 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       return llmPendingMap.get(stateKey);
     }
 
-    const topEntries = lexicalEntries.slice(0, Math.min(state.llmConfig?.candidateLimit || runtimeConfig.llmCandidateLimit, lexicalEntries.length));
+    const topEntries = lexicalEntries.slice(0, Math.min(runtimeConfig.llmCandidateLimit, lexicalEntries.length));
 
     const pending = (async () => {
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), state.llmConfig?.timeoutMs || runtimeConfig.llmTimeoutMs);
+      const timeoutId = window.setTimeout(() => controller.abort(), runtimeConfig.llmTimeoutMs);
       try {
-        const responsePayload = state.llmConfig?.mode === "browser"
-          ? await requestBrowserDirectRerank(state.llmConfig, state, topEntries, controller)
-          : await requestApiAbstractRerank(state.llmConfig, state, topEntries, controller);
+        const responsePayload = await requestApiAbstractRerank(state, topEntries, controller);
         const ranked = Array.isArray(responsePayload?.ranked) ? responsePayload.ranked : [];
         const rankedMap = new Map();
         for (const item of ranked) {
@@ -2248,7 +1755,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       } catch (error) {
         return {
           entries: lexicalEntries,
-          rankingStatus: lexicalFallbackStatus(llmErrorDetail(error, state.llmConfig)),
+          rankingStatus: lexicalFallbackStatus(llmErrorDetail(error)),
         };
       } finally {
         window.clearTimeout(timeoutId);
@@ -2640,20 +2147,6 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     renderPage(state, shouldScroll);
   }
 
-  function refreshCurrentSearchAfterLlmSettingsChange() {
-    clearPreparedSearchCache();
-    updateLlmBrowserPanelStatus();
-    const state = currentState();
-    if (state.scope === "abstract" && state.query.hasRawQuery && state.shouldLoad) {
-      page = 1;
-      loadAndRenderPage().catch((error) => {
-        throw error;
-      });
-      return;
-    }
-    setRankingStatus(defaultRankingStatus(state));
-  }
-
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     page = 1;
@@ -2683,41 +2176,6 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       loadAndRenderPage().catch((error) => {
         throw error;
       });
-    });
-  }
-
-  for (const element of [llmBrowserToggle, llmProviderBaseUrlInput, llmProviderModelInput, llmProviderApiKeyInput, llmProviderRememberInput].filter(Boolean)) {
-    element.addEventListener("input", () => {
-      updateLlmBrowserPanelStatus();
-    });
-    element.addEventListener("change", () => {
-      updateLlmBrowserPanelStatus();
-    });
-  }
-
-  if (llmProviderApplyButton) {
-    llmProviderApplyButton.addEventListener("click", () => {
-      persistLlmBrowserSettings(readCurrentLlmBrowserSettings());
-      refreshCurrentSearchAfterLlmSettingsChange();
-    });
-  }
-
-  if (llmProviderClearButton) {
-    llmProviderClearButton.addEventListener("click", () => {
-      clearPersistedLlmBrowserSettings();
-      const cleared = {
-        enabled: false,
-        baseUrl: runtimeConfig.llmBrowserDefaultBaseUrl || "",
-        model: runtimeConfig.llmBrowserDefaultModel || "",
-        apiKey: "",
-        rememberKey: false,
-      };
-      if (llmBrowserToggle) llmBrowserToggle.checked = false;
-      if (llmProviderBaseUrlInput) llmProviderBaseUrlInput.value = cleared.baseUrl;
-      if (llmProviderModelInput) llmProviderModelInput.value = cleared.model;
-      if (llmProviderApiKeyInput) llmProviderApiKeyInput.value = "";
-      if (llmProviderRememberInput) llmProviderRememberInput.checked = false;
-      refreshCurrentSearchAfterLlmSettingsChange();
     });
   }
 
