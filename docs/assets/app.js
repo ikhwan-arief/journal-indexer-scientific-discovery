@@ -2150,18 +2150,29 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       if (record.sinta_url) {
         side.appendChild(buildDetailItem("SINTA Profile", record.sinta_url, siteRoot, true));
       }
+      layout.appendChild(side);
+
+      article.appendChild(layout);
+
+      const insightCards = [];
       if (state.scope === "abstract" && abstractSummary) {
-        side.appendChild(createInsightBox(abstractSummary, abstractSummary.fitPercentage));
+        insightCards.push(createInsightBox(abstractSummary, abstractSummary.fitPercentage));
       }
       if (state.scope === "abstract" && entry.llmSummary) {
         const llmInsight = createLlmInsightBox(entry.llmSummary);
         if (llmInsight) {
-          side.appendChild(llmInsight);
+          insightCards.push(llmInsight);
         }
       }
-      layout.appendChild(side);
+      if (insightCards.length) {
+        const insightTray = document.createElement("div");
+        insightTray.className = `search-card-insights ${insightCards.length > 1 ? "search-card-insights-double" : "search-card-insights-single"}`;
+        for (const insightCard of insightCards) {
+          insightTray.appendChild(insightCard);
+        }
+        article.appendChild(insightTray);
+      }
 
-      article.appendChild(layout);
       article.appendChild(createSearchActions(record, siteRoot));
       results.appendChild(article);
     }
