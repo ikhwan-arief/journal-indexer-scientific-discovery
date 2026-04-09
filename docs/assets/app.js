@@ -84,7 +84,8 @@ const MAX_LLM_TIMEOUT_MS = 120000;
 const LLM_ABSTRACT_MIN_CHARS = 200;
 const LLM_ABSTRACT_MIN_MEANINGFUL_TOKENS = 15;
 const LLM_RERANK_CANDIDATE_LIMIT = 50;
-const LLM_COLD_START_RETRY_DELAY_MS = 2500;
+const LLM_COLD_START_RETRY_DELAY_MS = 5000;
+const LLM_COLD_START_MAX_ATTEMPTS = 3;
 const LLM_COLD_START_RETRYABLE_STATUSES = new Set([502, 503, 504]);
 const ABSTRACT_LOW_SIGNAL_TERMS = [
   "study", "work", "research", "result", "method", "analysis", "data", "model", "system", "approach",
@@ -1694,7 +1695,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     };
 
     const endpoint = llmAbstractEndpoint(runtimeConfig.llmApiBaseUrl);
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < LLM_COLD_START_MAX_ATTEMPTS; attempt += 1) {
       try {
         const response = await fetch(endpoint, {
           method: "POST",
@@ -1717,7 +1718,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
             void error;
           }
 
-          if (attempt === 0 && LLM_COLD_START_RETRYABLE_STATUSES.has(response.status)) {
+          if (attempt + 1 < LLM_COLD_START_MAX_ATTEMPTS && LLM_COLD_START_RETRYABLE_STATUSES.has(response.status)) {
             await delayWithSignal(controller.signal, LLM_COLD_START_RETRY_DELAY_MS);
             continue;
           }
@@ -1729,7 +1730,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
         if (error?.name === "AbortError") {
           throw error;
         }
-        if (attempt === 0 && error instanceof TypeError) {
+        if (attempt + 1 < LLM_COLD_START_MAX_ATTEMPTS && error instanceof TypeError) {
           await delayWithSignal(controller.signal, LLM_COLD_START_RETRY_DELAY_MS);
           continue;
         }
