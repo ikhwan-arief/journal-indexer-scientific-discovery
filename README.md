@@ -156,6 +156,7 @@ Notes for Render free:
 - the first request after idle time can be slower because Render free may cold-start the service
 - the frontend retries cold-start failures automatically before falling back to lexical ranking
 - the public GitHub Pages build uses a smaller default LLM shortlist on `onrender.com` to keep reranking within the browser timeout budget
+- this repo now includes a scheduled GitHub Actions workflow that pings the Render `healthz` endpoint every 5 minutes while LLM mode is enabled
 
 ## GitHub-Only Online Bridge
 
