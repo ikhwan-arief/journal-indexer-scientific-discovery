@@ -92,6 +92,8 @@ class ApiSettings:
     body_limit_bytes: int
     rate_limit_window_seconds: int
     rate_limit_max_requests: int
+    result_cache_ttl_seconds: int
+    result_cache_max_entries: int
     allow_origins: tuple[str, ...]
     allow_origin_regex: str
     enable_docs: bool
@@ -123,6 +125,8 @@ def get_settings() -> ApiSettings:
         body_limit_bytes=max(4096, env_int("LLM_BODY_LIMIT_BYTES", 250000)),
         rate_limit_window_seconds=max(1, env_int("LLM_RATE_LIMIT_WINDOW_SECONDS", 60)),
         rate_limit_max_requests=max(1, env_int("LLM_RATE_LIMIT_MAX_REQUESTS", 30)),
+        result_cache_ttl_seconds=max(0, env_int("LLM_RESULT_CACHE_TTL_SECONDS", 21600)),
+        result_cache_max_entries=max(0, env_int("LLM_RESULT_CACHE_MAX_ENTRIES", 256)),
         allow_origins=parse_origins(os.getenv("LLM_CORS_ORIGINS")),
         allow_origin_regex=(os.getenv("LLM_CORS_ALLOW_ORIGIN_REGEX") or DEFAULT_ALLOW_ORIGIN_REGEX).strip(),
         enable_docs=env_bool("LLM_API_ENABLE_DOCS", False),

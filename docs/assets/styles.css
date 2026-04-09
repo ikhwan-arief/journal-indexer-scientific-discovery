@@ -940,15 +940,15 @@ tbody tr:last-child td {
 .search-card-insights {
   display: grid;
   gap: 1rem;
-  width: 100%;
-  max-width: 56rem;
+  width: calc(100% - 1rem);
+  max-width: none;
   margin: 1.25rem auto 0;
-  justify-content: center;
   align-items: stretch;
+  box-sizing: border-box;
 }
 
 .search-card-insights-single {
-  grid-template-columns: minmax(0, 28rem);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .search-card-insights-double {

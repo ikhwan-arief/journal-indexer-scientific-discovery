@@ -1013,7 +1013,7 @@ function matchedFieldLabel(field) {
 }
 
 function createLlmInsightBox(summary) {
-  if (!summary || (!summary.rationale && !(summary.matchedFields || []).length)) {
+  if (!summary) {
     return null;
   }
 
@@ -1024,19 +1024,19 @@ function createLlmInsightBox(summary) {
   heading.textContent = `LLM scope score: ${summary.llmScore}/100`;
   wrapper.appendChild(heading);
 
-  if (summary.rationale) {
-    const rationale = document.createElement("span");
-    rationale.textContent = summary.rationale;
-    wrapper.appendChild(rationale);
-  }
+  const rationale = document.createElement("span");
+  rationale.textContent = summary.rationale || "This journal was evaluated by the LLM within the reranked shortlist using topical scope signals from the available journal metadata.";
+  wrapper.appendChild(rationale);
 
+  const fields = document.createElement("span");
   if ((summary.matchedFields || []).length) {
-    const fields = document.createElement("span");
     fields.textContent = `Matched fields: ${summary.matchedFields.map(matchedFieldLabel).join(", ")}.`;
-    wrapper.appendChild(fields);
+  } else {
+    fields.textContent = "Matched fields: no field-level evidence was returned for this journal.";
   }
+  wrapper.appendChild(fields);
 
-  if (typeof summary.confidence === "number" && Number.isFinite(summary.confidence)) {
+  if (typeof summary.confidence === "number" && Number.isFinite(summary.confidence) && summary.confidence > 0) {
     const confidence = document.createElement("span");
     confidence.textContent = `Model confidence: ${Math.round(summary.confidence * 100)}%.`;
     wrapper.appendChild(confidence);
@@ -1652,6 +1652,9 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       && (message.includes("status 502") || message.includes("status 503") || message.includes("status 504"))
     ) {
       return "The LLM service on Render was still waking up, so the local scorer was used.";
+    }
+    if (message.toLowerCase().includes("rate limit exceeded") || message.toLowerCase().includes("free-models-per-day")) {
+      return "The OpenRouter free daily quota is exhausted, so the local scorer was used.";
     }
     return message;
   }

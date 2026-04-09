@@ -44,6 +44,8 @@ def make_settings() -> ApiSettings:
         body_limit_bytes=250000,
         rate_limit_window_seconds=60,
         rate_limit_max_requests=30,
+        result_cache_ttl_seconds=21600,
+        result_cache_max_entries=256,
         allow_origins=(),
         allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
         enable_docs=False,

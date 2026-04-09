@@ -30,6 +30,8 @@ def make_settings(**overrides) -> ApiSettings:
         body_limit_bytes=250000,
         rate_limit_window_seconds=60,
         rate_limit_max_requests=30,
+        result_cache_ttl_seconds=21600,
+        result_cache_max_entries=256,
         allow_origins=("https://example.github.io",),
         allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
         enable_docs=False,
@@ -128,6 +130,19 @@ def test_abstract_match_rate_limits_requests() -> None:
 
     assert first.status_code == 200
     assert second.status_code == 429
+
+
+def test_abstract_match_reuses_cached_result_for_identical_request() -> None:
+    provider = FakeProvider()
+    client = TestClient(create_app(settings=make_settings(), provider=provider))
+
+    first = client.post("/v1/abstract-match", json=build_payload(total=2))
+    second = client.post("/v1/abstract-match", json=build_payload(total=2))
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert len(provider.calls) == 1
+    assert first.json() == second.json()
 
 
 def test_abstract_match_rejects_large_body() -> None:

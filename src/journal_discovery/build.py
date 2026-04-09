@@ -882,11 +882,11 @@ def llm_timeout_ms() -> int:
 def llm_candidate_limit() -> int:
     raw_value = (os.getenv("LLM_CANDIDATE_LIMIT") or "").strip()
     if not raw_value:
-        return 20 if is_render_service_url(llm_api_base_url()) else 50
+        return 10 if is_render_service_url(llm_api_base_url()) else 50
     try:
         value = int(raw_value)
     except ValueError:
-        return 20 if is_render_service_url(llm_api_base_url()) else 50
+        return 10 if is_render_service_url(llm_api_base_url()) else 50
     return max(1, min(50, value))
 
 

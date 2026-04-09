@@ -50,7 +50,7 @@ def test_home_page_uses_render_aware_timeout_default(monkeypatch) -> None:
 
     assert 'data-llm-abstract-enabled="true"' in html
     assert 'data-llm-timeout-ms="90000"' in html
-    assert 'data-llm-candidate-limit="20"' in html
+    assert 'data-llm-candidate-limit="10"' in html
 
 
 def test_home_page_omits_external_connect_src_without_llm(monkeypatch) -> None:

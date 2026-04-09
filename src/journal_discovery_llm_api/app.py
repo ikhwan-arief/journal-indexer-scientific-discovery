@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import json
+from collections import OrderedDict
+from hashlib import sha256
+from time import monotonic
 from time import perf_counter
 
 from fastapi import FastAPI, HTTPException, Request
@@ -10,6 +14,45 @@ from .config import ApiSettings, get_settings
 from .provider import ProviderRequestError, ProviderTimeoutError, build_provider, truncate_text
 from .rate_limit import InMemoryRateLimiter
 from .schemas import AbstractCandidate, AbstractMatchRequest, AbstractMatchResponse, ProviderScoredCandidate, RankedCandidate
+
+
+class InMemoryResponseCache:
+    def __init__(self, *, ttl_seconds: int, max_entries: int) -> None:
+        self.ttl_seconds = max(0, int(ttl_seconds))
+        self.max_entries = max(0, int(max_entries))
+        self._entries: OrderedDict[str, tuple[float, AbstractMatchResponse]] = OrderedDict()
+
+    def _purge_expired(self) -> None:
+        if self.ttl_seconds <= 0 or not self._entries:
+            return
+        now = monotonic()
+        expired = [key for key, (expires_at, _) in self._entries.items() if expires_at <= now]
+        for key in expired:
+            self._entries.pop(key, None)
+
+    def get(self, key: str) -> AbstractMatchResponse | None:
+        if self.max_entries <= 0:
+            return None
+        self._purge_expired()
+        entry = self._entries.get(key)
+        if not entry:
+            return None
+        expires_at, payload = entry
+        if self.ttl_seconds > 0 and expires_at <= monotonic():
+            self._entries.pop(key, None)
+            return None
+        self._entries.move_to_end(key)
+        return payload.model_copy(deep=True)
+
+    def set(self, key: str, payload: AbstractMatchResponse) -> None:
+        if self.max_entries <= 0:
+            return
+        self._purge_expired()
+        expires_at = monotonic() + self.ttl_seconds if self.ttl_seconds > 0 else float("inf")
+        self._entries[key] = (expires_at, payload.model_copy(deep=True))
+        self._entries.move_to_end(key)
+        while len(self._entries) > self.max_entries:
+            self._entries.popitem(last=False)
 
 
 def sort_scored_candidates(candidates: list[ProviderScoredCandidate]) -> list[ProviderScoredCandidate]:
@@ -26,6 +69,27 @@ def sort_scored_candidates(candidates: list[ProviderScoredCandidate]) -> list[Pr
 
 def slice_candidates(candidates: list[AbstractCandidate], size: int) -> list[list[AbstractCandidate]]:
     return [candidates[index:index + size] for index in range(0, len(candidates), size)]
+
+
+def build_cache_key(settings: ApiSettings, query_text: str, payload: AbstractMatchRequest) -> str:
+    request_fingerprint = {
+        "model": settings.provider_model,
+        "query_text": query_text,
+        "top_n": payload.top_n,
+        "candidates": [
+            {
+                "sourceid": candidate.sourceid,
+                "title": candidate.title,
+                "categories": candidate.categories,
+                "areas": candidate.areas,
+                "subject_area": candidate.subject_area,
+                "lexical_score": float(candidate.lexical_score),
+            }
+            for candidate in payload.candidates
+        ],
+    }
+    encoded = json.dumps(request_fingerprint, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return sha256(encoded).hexdigest()
 
 
 def root_page_html(settings: ApiSettings) -> str:
@@ -101,12 +165,17 @@ def create_app(
     settings: ApiSettings | None = None,
     provider=None,
     rate_limiter: InMemoryRateLimiter | None = None,
+    result_cache: InMemoryResponseCache | None = None,
 ) -> FastAPI:
     api_settings = settings or get_settings()
     api_provider = provider or build_provider(api_settings)
     limiter = rate_limiter or InMemoryRateLimiter(
         max_requests=api_settings.rate_limit_max_requests,
         window_seconds=api_settings.rate_limit_window_seconds,
+    )
+    cache = result_cache or InMemoryResponseCache(
+        ttl_seconds=api_settings.result_cache_ttl_seconds,
+        max_entries=api_settings.result_cache_max_entries,
     )
 
     app = FastAPI(
@@ -158,6 +227,10 @@ def create_app(
 
         start_time = perf_counter()
         truncated_query = truncate_text(payload.query_text, api_settings.query_char_limit)
+        cache_key = build_cache_key(api_settings, truncated_query, payload)
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
         try:
             batch_results: list[ProviderScoredCandidate] = []
             for batch in slice_candidates(payload.candidates, api_settings.batch_size):
@@ -181,12 +254,14 @@ def create_app(
             )
 
         latency_ms = max(0, int((perf_counter() - start_time) * 1000))
-        return AbstractMatchResponse(
+        response_payload = AbstractMatchResponse(
             mode="llm_assisted",
             model=api_provider.model_name,
             latency_ms=latency_ms,
             ranked=ranked,
         )
+        cache.set(cache_key, response_payload)
+        return response_payload
 
     return app
 
