@@ -848,6 +848,14 @@ def is_local_service_url(raw_url: str | None) -> bool:
         return False
 
 
+def is_render_service_url(raw_url: str | None) -> bool:
+    if not raw_url:
+        return False
+    parsed = urlparse(raw_url)
+    hostname = (parsed.hostname or "").strip().lower()
+    return hostname == "onrender.com" or hostname.endswith(".onrender.com")
+
+
 def llm_abstract_enabled() -> bool:
     api_url = llm_api_base_url()
     if not api_url:
@@ -859,7 +867,8 @@ def llm_abstract_enabled() -> bool:
 
 
 def llm_timeout_ms() -> int:
-    default_timeout_ms = 60000 if is_local_service_url(llm_api_base_url()) else 8000
+    api_url = llm_api_base_url()
+    default_timeout_ms = 60000 if is_local_service_url(api_url) else 90000 if is_render_service_url(api_url) else 8000
     raw_value = (os.getenv("LLM_TIMEOUT_MS") or "").strip()
     if not raw_value:
         return default_timeout_ms

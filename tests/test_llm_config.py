@@ -29,3 +29,17 @@ def test_remote_provider_keeps_default_timeout(monkeypatch) -> None:
         assert settings.provider_timeout_seconds == 30.0
     finally:
         get_settings.cache_clear()
+
+
+def test_openrouter_provider_defaults_to_longer_timeout(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_PROVIDER_BASE_URL", "https://openrouter.ai/api/v1")
+    monkeypatch.setenv("LLM_PROVIDER_API_KEY", "secret")
+    monkeypatch.setenv("LLM_PROVIDER_MODEL", "openrouter/free")
+    monkeypatch.delenv("LLM_PROVIDER_TIMEOUT_SECONDS", raising=False)
+    get_settings.cache_clear()
+
+    try:
+        settings = get_settings()
+        assert settings.provider_timeout_seconds == 60.0
+    finally:
+        get_settings.cache_clear()

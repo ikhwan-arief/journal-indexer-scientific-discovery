@@ -2,6 +2,8 @@ FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PYTHONPATH=/app/src \
     PORT=10000
 
 WORKDIR /app
@@ -13,4 +15,4 @@ COPY src ./src
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "uvicorn journal_discovery_llm_api.app:app --host 0.0.0.0 --port ${PORT:-10000} --app-dir src"]
+CMD ["sh", "-c", "exec uvicorn journal_discovery_llm_api.app:app --host 0.0.0.0 --port ${PORT:-10000} --app-dir src"]

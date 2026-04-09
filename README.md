@@ -149,6 +149,13 @@ High-level flow:
 
 This keeps the API key server-side on Render and removes the need for user-supplied browser keys.
 
+Notes for Render free:
+
+- the backend health check is `https://your-service.onrender.com/healthz`
+- `https://your-service.onrender.com/` is now a small status page, not the main app UI
+- the first request after idle time can be slower because Render free may cold-start the service
+- the frontend retries one LLM request automatically before falling back to lexical ranking
+
 ## GitHub-Only Online Bridge
 
 If you do not have a permanent public host for the LLM API, you can temporarily power the GitHub Pages site from your local machine by combining:

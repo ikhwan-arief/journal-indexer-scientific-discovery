@@ -65,6 +65,14 @@ def is_local_service_url(raw_value: str | None) -> bool:
         return False
 
 
+def is_openrouter_service_url(raw_value: str | None) -> bool:
+    if not raw_value:
+        return False
+    parsed = urlparse(raw_value)
+    hostname = (parsed.hostname or "").strip().lower()
+    return hostname in {"openrouter.ai", "www.openrouter.ai"}
+
+
 @dataclass(frozen=True, slots=True)
 class ApiSettings:
     provider_kind: str
@@ -96,7 +104,7 @@ class ApiSettings:
 @lru_cache(maxsize=1)
 def get_settings() -> ApiSettings:
     provider_base_url = (os.getenv("LLM_PROVIDER_BASE_URL") or "").strip().rstrip("/")
-    default_provider_timeout = 120.0 if is_local_service_url(provider_base_url) else 30.0
+    default_provider_timeout = 120.0 if is_local_service_url(provider_base_url) else 60.0 if is_openrouter_service_url(provider_base_url) else 30.0
     return ApiSettings(
         provider_kind=(os.getenv("LLM_PROVIDER_KIND") or "openai_compatible").strip().lower(),
         provider_base_url=provider_base_url,

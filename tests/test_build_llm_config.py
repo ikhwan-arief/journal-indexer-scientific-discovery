@@ -40,6 +40,17 @@ def test_home_page_uses_longer_default_timeout_for_local_llm(monkeypatch) -> Non
     assert 'data-llm-timeout-ms="60000"' in html
 
 
+def test_home_page_uses_render_aware_timeout_default(monkeypatch) -> None:
+    monkeypatch.setenv("LLM_API_BASE_URL", "https://journal-discovery-llm-api.onrender.com")
+    monkeypatch.delenv("LLM_TIMEOUT_MS", raising=False)
+    monkeypatch.delenv("LLM_ABSTRACT_MATCH_ENABLED", raising=False)
+
+    html = build.home_page_html(sample_summary())
+
+    assert 'data-llm-abstract-enabled="true"' in html
+    assert 'data-llm-timeout-ms="90000"' in html
+
+
 def test_home_page_omits_external_connect_src_without_llm(monkeypatch) -> None:
     monkeypatch.delenv("LLM_API_BASE_URL", raising=False)
     monkeypatch.delenv("LLM_TIMEOUT_MS", raising=False)

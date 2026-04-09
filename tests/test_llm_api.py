@@ -155,3 +155,14 @@ def test_cors_allows_configured_origin() -> None:
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "https://example.github.io"
 
+
+def test_root_page_exposes_browser_friendly_service_summary() -> None:
+    provider = FakeProvider()
+    client = TestClient(create_app(settings=make_settings(), provider=provider))
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "Journal Discovery LLM API" in response.text
+    assert "/healthz" in response.text
+    assert "/v1/abstract-match" in response.text

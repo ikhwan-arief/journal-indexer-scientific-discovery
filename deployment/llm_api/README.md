@@ -20,6 +20,8 @@ This service exposes `POST /v1/abstract-match` for Journal Discovery abstract re
 
 If `LLM_PROVIDER_BASE_URL` points to `localhost` or `127.0.0.1` and `LLM_PROVIDER_TIMEOUT_SECONDS` is not set, the service defaults to `120` seconds to tolerate slower local Ollama inference.
 
+If `LLM_PROVIDER_BASE_URL=https://openrouter.ai/api/v1` and `LLM_PROVIDER_TIMEOUT_SECONDS` is not set, the service defaults to `60` seconds because free-tier responses can be slower.
+
 ## Build and run
 
 ```bash
@@ -49,6 +51,7 @@ Service settings:
 - Dockerfile: `deployment/llm_api/Dockerfile`
 - Health check: `/healthz`
 - Runtime port: `PORT` from Render, defaulting to `10000`
+- Browser-friendly status page: `/`
 
 Set these environment variables in Render:
 
@@ -61,8 +64,11 @@ The blueprint also sets:
 
 - `LLM_CORS_ORIGINS=https://ikhwan-arief.github.io`
 - `LLM_API_ENABLE_DOCS=false`
+- `LLM_PROVIDER_TIMEOUT_SECONDS=60`
 
 The bundled `render.yaml` now defaults to OpenRouter's OpenAI-compatible endpoint plus the `openrouter/free` router. You only need to fill in `LLM_PROVIDER_API_KEY` in Render.
+
+Render free can cold-start after idle periods. The first request may be slower or briefly return a `502` while the service wakes up. The frontend now retries once automatically before falling back to lexical ranking.
 
 After Render gives you a public URL such as `https://journal-discovery-llm-api.onrender.com`, point the GitHub Pages build to that URL through:
 

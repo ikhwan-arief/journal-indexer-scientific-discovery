@@ -80,9 +80,12 @@ const ABSTRACT_TOKEN_SIGNAL_REFERENCE = 60;
 const ABSTRACT_TOKEN_SIGNAL_MIN = 0.6;
 const ABSTRACT_TOKEN_SIGNAL_MAX = 1.8;
 const DEFAULT_LLM_TIMEOUT_MS = 8000;
+const MAX_LLM_TIMEOUT_MS = 120000;
 const LLM_ABSTRACT_MIN_CHARS = 200;
 const LLM_ABSTRACT_MIN_MEANINGFUL_TOKENS = 15;
 const LLM_RERANK_CANDIDATE_LIMIT = 50;
+const LLM_COLD_START_RETRY_DELAY_MS = 2500;
+const LLM_COLD_START_RETRYABLE_STATUSES = new Set([502, 503, 504]);
 const ABSTRACT_LOW_SIGNAL_TERMS = [
   "study", "work", "research", "result", "method", "analysis", "data", "model", "system", "approach",
   "performance", "program", "strategy", "design", "evaluation", "practice", "management", "policy",
@@ -494,6 +497,17 @@ function llmAbstractEndpoint(baseUrl) {
   return `${trimmed}/v1/abstract-match`;
 }
 
+function isRenderHostedUrl(rawUrl) {
+  try {
+    const parsed = new URL(String(rawUrl || ""));
+    const hostname = String(parsed.hostname || "").trim().toLowerCase();
+    return hostname === "onrender.com" || hostname.endsWith(".onrender.com");
+  } catch (error) {
+    void error;
+    return false;
+  }
+}
+
 function readRuntimeConfig(body) {
   const override = window.__JD_RUNTIME_CONFIG__ || {};
   const apiBaseUrl = trimTrailingSlashes(override.llmApiBaseUrl || body.dataset.llmApiBaseUrl || "");
@@ -504,7 +518,7 @@ function readRuntimeConfig(body) {
   const timeoutMs = Math.max(
     1000,
     Math.min(
-      60000,
+      MAX_LLM_TIMEOUT_MS,
       normalizeInteger(override.llmTimeoutMs, normalizeInteger(body.dataset.llmTimeoutMs, DEFAULT_LLM_TIMEOUT_MS))
     )
   );
@@ -1632,7 +1646,35 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     if (!message) {
       return fallbackReason;
     }
+    if (
+      isRenderHostedUrl(runtimeConfig.llmApiBaseUrl)
+      && (message.includes("status 502") || message.includes("status 503") || message.includes("status 504"))
+    ) {
+      return "The LLM service on Render was still waking up, so the local scorer was used.";
+    }
     return message;
+  }
+
+  function delayWithSignal(signal, durationMs) {
+    return new Promise((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new DOMException("The operation was aborted.", "AbortError"));
+        return;
+      }
+      const timeoutId = window.setTimeout(() => {
+        cleanup();
+        resolve();
+      }, durationMs);
+      const handleAbort = () => {
+        cleanup();
+        reject(new DOMException("The operation was aborted.", "AbortError"));
+      };
+      function cleanup() {
+        window.clearTimeout(timeoutId);
+        signal?.removeEventListener("abort", handleAbort);
+      }
+      signal?.addEventListener("abort", handleAbort, { once: true });
+    });
   }
 
   async function requestApiAbstractRerank(state, topEntries, controller) {
@@ -1651,30 +1693,50 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       })),
     };
 
-    const response = await fetch(llmAbstractEndpoint(runtimeConfig.llmApiBaseUrl), {
-      method: "POST",
-      credentials: "omit",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      let detail = `The LLM API returned status ${response.status}.`;
+    const endpoint = llmAbstractEndpoint(runtimeConfig.llmApiBaseUrl);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        const errorPayload = await response.json();
-        if (errorPayload?.detail) {
-          detail = String(errorPayload.detail);
-        }
-      } catch (error) {
-        void error;
-      }
-      throw new Error(detail);
-    }
+        const response = await fetch(endpoint, {
+          method: "POST",
+          credentials: "omit",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
 
-    return response.json();
+        if (!response.ok) {
+          let detail = `The LLM API returned status ${response.status}.`;
+          try {
+            const errorPayload = await response.json();
+            if (errorPayload?.detail) {
+              detail = String(errorPayload.detail);
+            }
+          } catch (error) {
+            void error;
+          }
+
+          if (attempt === 0 && LLM_COLD_START_RETRYABLE_STATUSES.has(response.status)) {
+            await delayWithSignal(controller.signal, LLM_COLD_START_RETRY_DELAY_MS);
+            continue;
+          }
+          throw new Error(detail);
+        }
+
+        return response.json();
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          throw error;
+        }
+        if (attempt === 0 && error instanceof TypeError) {
+          await delayWithSignal(controller.signal, LLM_COLD_START_RETRY_DELAY_MS);
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error("The LLM API could not be reached.");
   }
 
   async function rerankAbstractEntries(state, lexicalEntries) {

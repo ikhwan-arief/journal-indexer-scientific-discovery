@@ -190,6 +190,14 @@ def fulfill_mock_llm_route(route, recorded_requests: list[dict[str, object]], mo
         )
         return
 
+    if mode == "retry_success" and len(recorded_requests) == 1:
+        route.fulfill(
+            status=503,
+            content_type="application/json",
+            body=json.dumps({"detail": "Mock LLM cold start."}),
+        )
+        return
+
     candidates = list(payload.get("candidates", []))
     ranked = []
     for index, candidate in enumerate(reversed(candidates), start=1):
@@ -512,6 +520,24 @@ def main() -> int:
             raise AssertionError("Expected fallback ranking to preserve the lexical first result.")
         if not llm_error_requests:
             raise AssertionError("Expected failing LLM rerank page to still attempt the mock API request.")
+
+        llm_retry_page = new_smoke_page(browser)
+        llm_retry_requests: list[dict[str, object]] = []
+        configure_llm_runtime(llm_retry_page, base_url, candidate_depth=5, timeout_ms=12000)
+        llm_retry_page.route("**/v1/abstract-match", lambda route: fulfill_mock_llm_route(route, llm_retry_requests, "retry_success"))
+        llm_retry_page.goto(f"{base_url}/search/", wait_until="networkidle")
+        llm_retry_page.wait_for_selector("#search-form")
+        submit_search(
+            llm_retry_page,
+            LONG_ABSTRACT_FIT_QUERY,
+            scope="abstract",
+        )
+        llm_retry_page.wait_for_selector(".llm-insight", timeout=20000)
+        llm_retry_status_text = llm_retry_page.locator("#ranking-status").inner_text()
+        if "LLM-assisted ranking" not in llm_retry_status_text:
+            raise AssertionError(f"Expected retrying LLM rerank to recover successfully, got: {llm_retry_status_text}")
+        if len(llm_retry_requests) != 2:
+            raise AssertionError(f"Expected exactly two LLM API attempts for retry recovery, got: {len(llm_retry_requests)}")
 
         short_query_page = new_smoke_page(browser)
         configure_llm_runtime(short_query_page, base_url, candidate_depth=5)
