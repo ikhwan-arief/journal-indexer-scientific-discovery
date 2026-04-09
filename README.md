@@ -140,7 +140,8 @@ High-level flow:
 
 1. Create a Render Web Service from this repository.
 2. Let Render read `render.yaml`.
-3. Fill in `LLM_PROVIDER_BASE_URL`, `LLM_PROVIDER_API_KEY`, and `LLM_PROVIDER_MODEL` in Render.
+3. Fill in `LLM_PROVIDER_API_KEY` in Render.
+   The bundled `render.yaml` already defaults to OpenRouter's `https://openrouter.ai/api/v1` endpoint and `openrouter/free`.
 4. After Render gives you a public `onrender.com` URL, set GitHub repo variables:
    - `LLM_API_BASE_URL=https://your-service.onrender.com`
    - `LLM_ABSTRACT_MATCH_ENABLED=true`

@@ -53,14 +53,16 @@ Service settings:
 Set these environment variables in Render:
 
 - `LLM_PROVIDER_KIND=openai_compatible`
-- `LLM_PROVIDER_BASE_URL=https://your-provider.example/v1`
+- `LLM_PROVIDER_BASE_URL=https://openrouter.ai/api/v1`
 - `LLM_PROVIDER_API_KEY=...`
-- `LLM_PROVIDER_MODEL=...`
+- `LLM_PROVIDER_MODEL=openrouter/free`
 
 The blueprint also sets:
 
 - `LLM_CORS_ORIGINS=https://ikhwan-arief.github.io`
 - `LLM_API_ENABLE_DOCS=false`
+
+The bundled `render.yaml` now defaults to OpenRouter's OpenAI-compatible endpoint plus the `openrouter/free` router. You only need to fill in `LLM_PROVIDER_API_KEY` in Render.
 
 After Render gives you a public URL such as `https://journal-discovery-llm-api.onrender.com`, point the GitHub Pages build to that URL through:
 
