@@ -17,6 +17,15 @@ class ProviderTimeoutError(ProviderRequestError):
     """Raised when the upstream provider times out."""
 
 
+def summarize_error_text(value: str | None, limit: int = 240) -> str:
+    compact = " ".join(str(value or "").split())
+    if not compact:
+        return ""
+    if len(compact) > limit:
+        compact = compact[: max(0, limit - 1)].rstrip() + "…"
+    return compact
+
+
 def truncate_text(value: str | None, limit: int) -> str:
     compact = " ".join(str(value or "").split())
     if len(compact) <= limit:
@@ -197,6 +206,13 @@ class OpenAICompatibleProvider:
             response.raise_for_status()
         except httpx.TimeoutException as error:
             raise ProviderTimeoutError("Upstream LLM provider timed out.") from error
+        except httpx.HTTPStatusError as error:
+            status_code = error.response.status_code if error.response is not None else None
+            response_text = summarize_error_text(error.response.text if error.response is not None else "")
+            detail = f"Upstream LLM provider returned HTTP {status_code or 'error'}."
+            if response_text:
+                detail = f"{detail} {response_text}"
+            raise ProviderRequestError(detail) from error
         except httpx.HTTPError as error:
             raise ProviderRequestError("Upstream LLM provider request failed.") from error
 
@@ -208,4 +224,3 @@ def build_provider(settings: ApiSettings) -> OpenAICompatibleProvider:
     if settings.provider_kind != "openai_compatible":
         raise RuntimeError(f"Unsupported LLM provider kind: {settings.provider_kind}")
     return OpenAICompatibleProvider(settings)
-

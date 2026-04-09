@@ -1,7 +1,14 @@
 from __future__ import annotations
 
+import httpx
+
 from journal_discovery_llm_api.config import ApiSettings
-from journal_discovery_llm_api.provider import build_prompt_payload, normalize_provider_output
+from journal_discovery_llm_api.provider import (
+    OpenAICompatibleProvider,
+    ProviderRequestError,
+    build_prompt_payload,
+    normalize_provider_output,
+)
 from journal_discovery_llm_api.schemas import AbstractCandidate
 
 
@@ -68,3 +75,23 @@ def test_normalize_provider_output_zeroes_malformed_candidates() -> None:
     assert normalized[1].llm_score == 0
     assert normalized[1].rationale == ""
 
+
+class ErroringClient:
+    def post(self, *args, **kwargs):
+        request = httpx.Request("POST", "https://provider.example/v1/chat/completions")
+        response = httpx.Response(401, request=request, text='{"error":{"message":"Invalid API key"}}')
+        raise httpx.HTTPStatusError("Unauthorized", request=request, response=response)
+
+
+def test_openai_compatible_provider_exposes_upstream_status_details() -> None:
+    provider = OpenAICompatibleProvider(make_settings(), client=ErroringClient())
+
+    try:
+        provider.rerank_batch("machine learning", [make_candidate("c1")])
+    except ProviderRequestError as error:
+        message = str(error)
+    else:
+        raise AssertionError("Expected ProviderRequestError to be raised")
+
+    assert "401" in message
+    assert "invalid api key" in message.lower()
