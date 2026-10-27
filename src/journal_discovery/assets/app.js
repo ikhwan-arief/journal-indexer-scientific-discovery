@@ -2323,13 +2323,13 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     const nextParams = new URLSearchParams();
     const rawQuery = queryInput.value.trim();
 
-    if (rawQuery && (state.scope !== "abstract" || rawQuery.length <= 2000)) {
+    if (rawQuery && rawQuery.length <= MAX_SEARCH_INPUT_CHARS) {
       nextParams.set("q", rawQuery);
     }
-    if (rawQuery && rawQuery.length <= 2000 && state.scope !== (pageMode === "home" ? "abstract" : "all")) {
+    if (rawQuery && rawQuery.length <= MAX_SEARCH_INPUT_CHARS && state.scope !== (pageMode === "home" ? "abstract" : "all")) {
       nextParams.set("scope", state.scope);
     }
-    if (rawQuery && rawQuery.length <= 2000 && state.scope === "abstract" && state.sortOrder !== "default") {
+    if (rawQuery && rawQuery.length <= MAX_SEARCH_INPUT_CHARS && state.scope === "abstract" && state.sortOrder !== "default") {
       nextParams.set("sort", state.sortOrder);
     }
     if (pageMode === "search") {
