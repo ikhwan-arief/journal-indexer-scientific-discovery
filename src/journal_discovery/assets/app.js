@@ -1582,7 +1582,10 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
   }
 
   if (privacyNote) {
-    privacyNote.hidden = !runtimeConfig.openAlexLiveEnabled;
+    privacyNote.hidden = !runtimeConfig.openAlexLiveEnabled && !runtimeConfig.llmAbstractEnabled;
+    if (!runtimeConfig.openAlexLiveEnabled && runtimeConfig.llmAbstractEnabled) {
+      privacyNote.textContent = "When LLM-assisted ranking is enabled, submitted abstracts are sent to the configured inference API for topical reranking.";
+    }
   }
 
   if (countrySelect) {
