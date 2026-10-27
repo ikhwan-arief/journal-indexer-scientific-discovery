@@ -80,6 +80,13 @@ const ABSTRACT_TOKEN_SIGNAL_REFERENCE = 60;
 const ABSTRACT_TOKEN_SIGNAL_MIN = 0.6;
 const ABSTRACT_TOKEN_SIGNAL_MAX = 1.8;
 const DEFAULT_LLM_TIMEOUT_MS = 8000;
+const MAX_SEARCH_INPUT_CHARS = 10000;
+const MAX_PROFILE_SOURCE_ID_CHARS = 128;
+const OPENALEX_API_ORIGIN = "https://api.openalex.org";
+const OPENALEX_SEMANTIC_MAX_CHARS = 2000;
+const OPENALEX_SEMANTIC_LIMIT = 50;
+const OPENALEX_TIMEOUT_MS = 15000;
+const OPENALEX_MIN_INTERVAL_MS = 1000;
 const MAX_LLM_TIMEOUT_MS = 120000;
 const LLM_ABSTRACT_MIN_CHARS = 200;
 const LLM_ABSTRACT_MIN_MEANINGFUL_TOKENS = 15;
@@ -332,12 +339,13 @@ function displayAbstractSignal(signal) {
 }
 
 function buildProcessedQuery(rawValue, scope) {
-  const trimmedRaw = (rawValue || "").trim();
-  const normalized = normalizeText(rawValue);
+  const boundedRaw = String(rawValue || "").slice(0, MAX_SEARCH_INPUT_CHARS);
+  const trimmedRaw = boundedRaw.trim();
+  const normalized = normalizeText(boundedRaw);
   const literalTokens = normalized ? normalized.split(" ").filter(Boolean) : [];
-  const tokens = tokenizeSearchText(rawValue);
-  const conceptTokens = extractConceptTokens(rawValue);
-  const phraseTokens = extractPhraseTokens(rawValue);
+  const tokens = tokenizeSearchText(boundedRaw).slice(0, 500);
+  const conceptTokens = extractConceptTokens(boundedRaw).slice(0, 100);
+  const phraseTokens = extractPhraseTokens(boundedRaw).slice(0, ABSTRACT_PHRASE_LIMIT);
   const allTokensAreInsignificant = literalTokens.length > 0 && literalTokens.every((token) => {
     const stemmed = stemToken(token);
     return token.length < 3 || SEARCH_STOP_WORDS.has(token) || SEARCH_STOP_WORDS.has(stemmed);
@@ -346,7 +354,7 @@ function buildProcessedQuery(rawValue, scope) {
   const hasMeaningfulSignals = tokens.length > 0 || conceptTokens.length > 0 || phraseTokens.length > 0;
 
   return {
-    raw: rawValue || "",
+    raw: boundedRaw,
     trimmedRaw,
     rawLength: trimmedRaw.length,
     normalized,
@@ -536,6 +544,10 @@ function readRuntimeConfig(body) {
     llmAbstractEnabled: enabled,
     llmTimeoutMs: timeoutMs,
     llmCandidateLimit,
+    openAlexLiveEnabled: normalizeBoolean(
+      override.openAlexLiveEnabled,
+      normalizeBoolean(body.dataset.openalexLiveEnabled, true)
+    ),
   };
 }
 
@@ -580,6 +592,20 @@ function safeText(value, fallback = "Not available") {
     return fallback;
   }
   return String(value);
+}
+
+function safeExternalUrl(value, { allowHttp = true } = {}) {
+  const raw = String(value || "").trim();
+  if (!raw || raw.length > 2048) return "";
+  try {
+    const parsed = new URL(raw, window.location.href);
+    const protocols = allowHttp ? new Set(["https:", "http:"]) : new Set(["https:"]);
+    if (!protocols.has(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) return "";
+    return parsed.href;
+  } catch (error) {
+    void error;
+    return "";
+  }
 }
 
 function quartilePriority(value) {
@@ -668,6 +694,12 @@ function prepareRecords(records) {
     record.doaj_indexed = Boolean(record.doaj_indexed);
     record.accreditation = accreditationPriority(record.accreditation) > 0 ? record.accreditation : null;
     record.profile_path = buildProfilePath(record);
+    record.openalex_topics = Array.isArray(record.openalex_topics)
+      ? record.openalex_topics.filter((item) => item && typeof item === "object").slice(0, 20)
+      : [];
+    record.openalex_evidence = Array.isArray(record.openalex_evidence)
+      ? record.openalex_evidence.filter((item) => item && typeof item === "object").slice(0, 5)
+      : [];
 
     const labels = indexedLabelList(record);
     record.index_summary = labels.length ? labels.join(", ") : "";
@@ -681,7 +713,9 @@ function prepareRecords(records) {
     record.normalized_subject_area = normalizeText(record.subject_area || "");
     record.normalized_index_summary = normalizeText(record.index_summary);
     record.normalized_issns = normalizeText((record.issns || []).join(" "));
-    record.topic_text = normalizeText(`${record.categories || ""} ${record.areas || ""} ${record.subject_area || ""}`);
+    const openalexTopicText = record.openalex_topics.map((topic) => String(topic.name || "")).join(" ");
+    const openalexEvidenceText = record.openalex_evidence.map((work) => String(work.title || "")).join(" ");
+    record.topic_text = normalizeText(`${record.categories || ""} ${record.areas || ""} ${record.subject_area || ""} ${openalexTopicText} ${openalexEvidenceText}`);
     record.sjr_value = Number(record.sjr_value || 0);
     record.h_index = Number(record.h_index || 0);
     record.search_text = [
@@ -703,6 +737,8 @@ function prepareRecords(records) {
     record.category_tokens = tokenizeSearchText(record.categories || "");
     record.area_tokens = tokenizeSearchText(record.areas || "");
     record.subject_area_tokens = tokenizeSearchText(record.subject_area || "");
+    record.openalex_topic_tokens = tokenizeSearchText(openalexTopicText);
+    record.openalex_evidence_tokens = tokenizeSearchText(openalexEvidenceText);
     record.title_phrase_tokens = extractPhraseTokens(record.title || "", { maxPhrases: ABSTRACT_RECORD_PHRASE_LIMIT });
     record.category_phrase_tokens = extractPhraseTokens(record.categories || "", { maxPhrases: ABSTRACT_RECORD_PHRASE_LIMIT });
     record.area_phrase_tokens = extractPhraseTokens(record.areas || "", { maxPhrases: ABSTRACT_RECORD_PHRASE_LIMIT });
@@ -717,7 +753,13 @@ function prepareRecords(records) {
     record.abstract_category_specific_tokens = record.category_tokens.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
     record.abstract_area_specific_tokens = record.area_tokens.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
     record.abstract_subject_area_specific_tokens = record.subject_area_tokens.filter((token) => !ABSTRACT_LOW_SIGNAL_TOKENS.has(token));
-    record.topic_tokens = mergeTokenLists(record.category_tokens, record.area_tokens, record.subject_area_tokens);
+    record.topic_tokens = mergeTokenLists(
+      record.category_tokens,
+      record.area_tokens,
+      record.subject_area_tokens,
+      record.openalex_topic_tokens,
+      record.openalex_evidence_tokens
+    );
     record.search_tokens = mergeTokenLists(
       record.title_tokens,
       record.publisher_tokens,
@@ -728,6 +770,8 @@ function prepareRecords(records) {
       record.subject_area_tokens,
       record.index_tokens,
       record.issn_tokens
+      ,record.openalex_topic_tokens
+      ,record.openalex_evidence_tokens
     );
 
     record.title_token_set = new Set(record.title_tokens);
@@ -737,6 +781,8 @@ function prepareRecords(records) {
     record.category_token_set = new Set(record.category_tokens);
     record.area_token_set = new Set(record.area_tokens);
     record.subject_area_token_set = new Set(record.subject_area_tokens);
+    record.openalex_topic_token_set = new Set(record.openalex_topic_tokens);
+    record.openalex_evidence_token_set = new Set(record.openalex_evidence_tokens);
     record.title_phrase_token_set = new Set(record.title_phrase_tokens);
     record.category_phrase_token_set = new Set(record.category_phrase_tokens);
     record.area_phrase_token_set = new Set(record.area_phrase_tokens);
@@ -812,6 +858,8 @@ function abstractMatchSummary(record, query) {
   const categoryMatches = tokenMatches(record.category_token_set, query.tokens);
   const areaMatches = tokenMatches(record.area_token_set, query.tokens);
   const subjectAreaMatches = tokenMatches(record.subject_area_token_set, query.tokens);
+  const openalexTopicMatches = tokenMatches(record.openalex_topic_token_set, query.tokens);
+  const openalexEvidenceMatches = tokenMatches(record.openalex_evidence_token_set, query.tokens);
   const titlePhraseMatches = tokenMatches(record.title_phrase_token_set, query.phraseTokens);
   const categoryPhraseMatches = tokenMatches(record.category_phrase_token_set, query.phraseTokens);
   const areaPhraseMatches = tokenMatches(record.area_phrase_token_set, query.phraseTokens);
@@ -820,7 +868,9 @@ function abstractMatchSummary(record, query) {
   const categoryConceptMatches = tokenMatches(record.category_concept_token_set, query.conceptTokens);
   const areaConceptMatches = tokenMatches(record.area_concept_token_set, query.conceptTokens);
   const subjectAreaConceptMatches = tokenMatches(record.subject_area_concept_token_set, query.conceptTokens);
-  const matchedTerms = mergeTokenLists(titleMatches, categoryMatches, areaMatches, subjectAreaMatches);
+  const matchedTerms = mergeTokenLists(
+    titleMatches, categoryMatches, areaMatches, subjectAreaMatches, openalexTopicMatches, openalexEvidenceMatches
+  );
   const matchedPhrases = mergeTokenLists(titlePhraseMatches, categoryPhraseMatches, areaPhraseMatches, subjectAreaPhraseMatches);
   const matchedConcepts = mergeTokenLists(titleConceptMatches, categoryConceptMatches, areaConceptMatches, subjectAreaConceptMatches);
   if (!matchedTerms.length && !matchedPhrases.length && !matchedConcepts.length) {
@@ -888,7 +938,9 @@ function abstractMatchSummary(record, query) {
   const breadthPenalty = Math.round(Math.max(0, journalSpecificWeight - matchedSpecificWeight) * 4);
   const baseScore = titleScore + categoryScore + areaScore + subjectAreaScore + titlePhraseScore + categoryPhraseScore
     + areaPhraseScore + subjectAreaPhraseScore + titleConceptScore + categoryConceptScore + areaConceptScore
-    + subjectAreaConceptScore + detailScore + phraseDetailScore + conceptDetailScore + fieldCoverageScore;
+    + subjectAreaConceptScore + detailScore + phraseDetailScore + conceptDetailScore + fieldCoverageScore
+    + (weightedAbstractTokenSum(openalexTopicMatches) * 30)
+    + (weightedAbstractTokenSum(openalexEvidenceMatches) * 35);
   const score = Math.max(1, baseScore + alignmentScore - breadthPenalty);
   const fitPercentage = Math.max(
     0,
@@ -900,6 +952,8 @@ function abstractMatchSummary(record, query) {
   if (mergeTokenLists(categoryMatches, categoryPhraseMatches, categoryConceptMatches).length) fields.push("Categories");
   if (mergeTokenLists(areaMatches, areaPhraseMatches, areaConceptMatches).length) fields.push("Areas");
   if (mergeTokenLists(subjectAreaMatches, subjectAreaPhraseMatches, subjectAreaConceptMatches).length) fields.push("SINTA Subject Area");
+  if (openalexTopicMatches.length) fields.push("OpenAlex topics");
+  if (openalexEvidenceMatches.length) fields.push("published article evidence");
 
   return {
     score,
@@ -1001,6 +1055,44 @@ function createInsightBox(insight, fitPercentage) {
   guidance.textContent = "100% means the abstract aligns very strongly with this journal's Title, Categories, Areas, and SINTA Subject Area when available. Generic method words count less than specific topic terms. Compare this percentage within the current search only; it is not a journal quality metric.";
   wrapper.appendChild(guidance);
 
+  return wrapper;
+}
+
+function createOpenAlexEvidenceBox(record) {
+  const works = Array.isArray(record.openalex_evidence) ? record.openalex_evidence.slice(0, 5) : [];
+  if (!works.length) return null;
+
+  const wrapper = document.createElement("section");
+  wrapper.className = "match-insight openalex-evidence";
+  const heading = document.createElement("strong");
+  heading.textContent = "OpenAlex publication evidence";
+  wrapper.appendChild(heading);
+  const list = document.createElement("ul");
+  for (const work of works) {
+    const item = document.createElement("li");
+    const title = String(work.title || "Untitled work").slice(0, 1000);
+    const year = Number.isInteger(work.publication_year) ? ` (${work.publication_year})` : "";
+    const doi = String(work.doi || "").toLowerCase();
+    const openalexId = String(work.openalex_work_id || "");
+    const href = /^10\.\d{4,9}\/\S+$/.test(doi)
+      ? `https://doi.org/${encodeURIComponent(doi).replace(/%2F/gi, "/")}`
+      : (/^W\d+$/.test(openalexId) ? `https://openalex.org/${openalexId}` : "");
+    if (href) {
+      const link = document.createElement("a");
+      link.href = href;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = `${title}${year}`;
+      item.appendChild(link);
+    } else {
+      item.textContent = `${title}${year}`;
+    }
+    list.appendChild(item);
+  }
+  wrapper.appendChild(list);
+  const note = document.createElement("span");
+  note.textContent = "These representative publications support topical fit; they do not indicate acceptance probability.";
+  wrapper.appendChild(note);
   return wrapper;
 }
 
@@ -1121,10 +1213,11 @@ function createSearchActions(record, siteRoot) {
   profileLink.title = `Open the profile page for ${record.title}`;
   wrapper.appendChild(profileLink);
 
-  if (record.journal_url) {
+  const safeJournalUrl = safeExternalUrl(record.journal_url);
+  if (safeJournalUrl) {
     const websiteLink = document.createElement("a");
     websiteLink.className = "button button-secondary";
-    websiteLink.href = record.journal_url;
+    websiteLink.href = safeJournalUrl;
     websiteLink.target = "_blank";
     websiteLink.rel = "noopener noreferrer";
     websiteLink.textContent = "Visit journal website";
@@ -1143,9 +1236,10 @@ function buildDetailItem(label, value, siteRoot, isLink = false) {
   wrapper.appendChild(name);
   const field = document.createElement("div");
   field.className = "field-value";
-  if (isLink && value) {
+  const safeLink = isLink ? safeExternalUrl(value) : "";
+  if (safeLink) {
     const link = document.createElement("a");
-    link.href = value;
+    link.href = safeLink;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.textContent = value;
@@ -1385,6 +1479,10 @@ function renderProfilePage(record, siteRoot) {
   layout.appendChild(side);
 
   card.appendChild(layout);
+  const evidenceBox = createOpenAlexEvidenceBox(record);
+  if (evidenceBox) {
+    card.appendChild(evidenceBox);
+  }
   shell.appendChild(card);
   section.appendChild(shell);
   root.appendChild(section);
@@ -1392,10 +1490,10 @@ function renderProfilePage(record, siteRoot) {
 
 async function renderDynamicProfile(profileIndex, siteRoot) {
   const params = new URLSearchParams(window.location.search);
-  const sourceid = params.get("sourceid") || "";
+  const sourceid = (params.get("sourceid") || "").slice(0, MAX_PROFILE_SOURCE_ID_CHARS);
   const versionTag = profileIndex.summary?.generated_at || "";
 
-  if (!sourceid) {
+  if (!sourceid || !/^(?:\d+|sinta-[A-Za-z0-9._:-]+|S\d+|jd-[a-f0-9]+)$/.test(sourceid)) {
     renderProfileEmptyState(
       "Journal profile not specified.",
       "Open a journal profile from the search results or journal links to load its details."
@@ -1470,6 +1568,8 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
   ];
   const llmRerankCache = new Map();
   const llmPendingMap = new Map();
+  const openAlexLiveCache = new Map();
+  let openAlexLastRequestAt = 0;
   let records = [];
   let page = 1;
   let preparedStateKey = "";
@@ -1482,7 +1582,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
   }
 
   if (privacyNote) {
-    privacyNote.hidden = !runtimeConfig.llmAbstractEnabled;
+    privacyNote.hidden = !runtimeConfig.openAlexLiveEnabled;
   }
 
   if (countrySelect) {
@@ -1524,6 +1624,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       llmEnabled: runtimeConfig.llmAbstractEnabled,
       llmTimeoutMs: runtimeConfig.llmTimeoutMs,
       llmCandidateLimit: runtimeConfig.llmCandidateLimit,
+      openAlexLiveEnabled: runtimeConfig.openAlexLiveEnabled,
       versionTag,
     });
   }
@@ -1540,7 +1641,10 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     }
 
     rankingStatus.hidden = false;
-    rankingStatus.className = `ranking-status ${status.mode === "llm" ? "ranking-status-llm" : "ranking-status-fallback"}`;
+    const statusClass = status.mode === "llm"
+      ? "ranking-status-llm"
+      : (status.mode === "openalex" ? "ranking-status-openalex" : "ranking-status-fallback");
+    rankingStatus.className = `ranking-status ${statusClass}`;
     rankingStatus.replaceChildren();
 
     const title = document.createElement("strong");
@@ -1614,16 +1718,173 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     if (state.scope !== "abstract" || !state.query.hasRawQuery) {
       return null;
     }
-    if (state.sortOrder === "fit_desc") {
-      return lexicalFallbackStatus("Highest abstract fit keeps ranking local and deterministic.");
+    if (!runtimeConfig.openAlexLiveEnabled) {
+      return lexicalFallbackStatus("Anonymous OpenAlex live search is disabled; local static ranking is active.");
     }
-    if (!runtimeConfig.llmAbstractEnabled || !runtimeConfig.llmApiBaseUrl) {
-      return lexicalFallbackStatus("LLM API is not configured for this build.");
+    return lexicalFallbackStatus("Local static ranking is available while anonymous OpenAlex semantic evidence is requested.");
+  }
+
+  function shouldUseOpenAlexLive(state) {
+    return state.scope === "abstract"
+      && state.query.hasRawQuery
+      && state.query.shouldLoad
+      && runtimeConfig.openAlexLiveEnabled;
+  }
+
+  function normalizedIssnKey(value) {
+    const compact = String(value || "").toUpperCase().replace(/[^0-9X]/g, "");
+    return /^[0-9]{7}[0-9X]$/.test(compact) ? compact : "";
+  }
+
+  function recordMatchesCurrentFilters(record, state) {
+    if (state.indexFilter === "wos" && !record.wos_indexed) return false;
+    if (state.indexFilter === "doaj" && !record.doaj_indexed) return false;
+    if (state.indexFilter === "scopus" && !record.scopus_indexed) return false;
+    if (state.accreditationFilter !== "all" && record.accreditation !== state.accreditationFilter) return false;
+    if (state.quartileFilter !== "all" && record.sjr_best_quartile !== state.quartileFilter) return false;
+    if (state.countryFilter !== "all" && record.country !== state.countryFilter) return false;
+    return true;
+  }
+
+  function buildLiveJournalLookups() {
+    const issnMap = new Map();
+    const titleMap = new Map();
+    for (const record of records) {
+      for (const rawIssn of record.issns || []) {
+        const key = normalizedIssnKey(rawIssn);
+        if (!key) continue;
+        const matches = issnMap.get(key) || [];
+        matches.push(record);
+        issnMap.set(key, matches);
+      }
+      const title = normalizeText(record.title || "");
+      if (title) {
+        const matches = titleMap.get(title) || [];
+        matches.push(record);
+        titleMap.set(title, matches);
+      }
     }
-    if (state.query.rawLength < LLM_ABSTRACT_MIN_CHARS || state.query.meaningfulTokenCount < LLM_ABSTRACT_MIN_MEANINGFUL_TOKENS) {
-      return lexicalFallbackStatus(`Abstracts shorter than ${LLM_ABSTRACT_MIN_CHARS} characters or below ${LLM_ABSTRACT_MIN_MEANINGFUL_TOKENS} meaningful tokens use the local scorer.`);
+    return { issnMap, titleMap };
+  }
+
+  function validateLiveWork(rawWork) {
+    if (!rawWork || typeof rawWork !== "object") return null;
+    if (Object.hasOwn(rawWork, "__proto__") || Object.hasOwn(rawWork, "constructor") || Object.hasOwn(rawWork, "prototype")) return null;
+    const id = String(rawWork.id || "").replace("https://openalex.org/", "");
+    const title = String(rawWork.title || "").replace(/\0/g, "").trim().slice(0, 1000);
+    const year = Number(rawWork.publication_year);
+    const relevance = Math.max(0, Math.min(1, Number(rawWork.relevance_score || 0)));
+    const source = rawWork.primary_location?.source;
+    if (!/^W\d+$/.test(id) || !title || !source || typeof source !== "object") return null;
+    if (String(source.type || "").toLowerCase() !== "journal") return null;
+    const sourceId = String(source.id || "").replace("https://openalex.org/", "");
+    if (!/^S\d+$/.test(sourceId)) return null;
+    const issns = [source.issn_l, ...(Array.isArray(source.issn) ? source.issn : [])]
+      .map(normalizedIssnKey)
+      .filter(Boolean);
+    const sourceTitle = String(source.display_name || "").replace(/\0/g, "").trim().slice(0, 500);
+    const doi = String(rawWork.doi || "").toLowerCase().replace(/^https?:\/\/doi\.org\//, "").slice(0, 512);
+    return {
+      openalex_work_id: id,
+      doi: /^10\.\d{4,9}\/\S+$/.test(doi) ? doi : null,
+      title,
+      publication_year: Number.isInteger(year) && year >= 1600 && year <= 2200 ? year : null,
+      relevance_score: relevance,
+      sourceId,
+      sourceTitle,
+      issns,
+    };
+  }
+
+  async function requestOpenAlexSemantic(state) {
+    const effectiveQuery = state.query.trimmedRaw.slice(0, OPENALEX_SEMANTIC_MAX_CHARS);
+    const cacheKey = normalizeText(effectiveQuery);
+    if (openAlexLiveCache.has(cacheKey)) return openAlexLiveCache.get(cacheKey);
+
+    const elapsed = Date.now() - openAlexLastRequestAt;
+    if (elapsed < OPENALEX_MIN_INTERVAL_MS) {
+      await delayWithSignal(null, OPENALEX_MIN_INTERVAL_MS - elapsed);
     }
-    return lexicalFallbackStatus("The local scorer is active while the shortlist is prepared.");
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), OPENALEX_TIMEOUT_MS);
+    const url = new URL(`${OPENALEX_API_ORIGIN}/works`);
+    url.searchParams.set("search.semantic", effectiveQuery);
+    url.searchParams.set("per_page", String(OPENALEX_SEMANTIC_LIMIT));
+    url.searchParams.set("select", "id,doi,title,publication_year,primary_location,relevance_score");
+    openAlexLastRequestAt = Date.now();
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        mode: "cors",
+        credentials: "omit",
+        cache: "no-store",
+        referrerPolicy: "no-referrer",
+        headers: { Accept: "application/json" },
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`OpenAlex returned HTTP ${response.status}.`);
+      const payload = await response.json();
+      if (!payload || typeof payload !== "object" || !Array.isArray(payload.results)) {
+        throw new Error("OpenAlex returned an invalid response shape.");
+      }
+      const works = payload.results.slice(0, OPENALEX_SEMANTIC_LIMIT).map(validateLiveWork).filter(Boolean);
+      openAlexLiveCache.set(cacheKey, works);
+      return works;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
+  async function fuseOpenAlexLive(state, lexicalEntries) {
+    try {
+      const works = await requestOpenAlexSemantic(state);
+      const { issnMap, titleMap } = buildLiveJournalLookups();
+      const evidenceBySourceid = new Map();
+      for (const work of works) {
+        let candidates = [];
+        for (const issn of work.issns) candidates.push(...(issnMap.get(issn) || []));
+        candidates = [...new Map(candidates.map((record) => [record.sourceid, record])).values()];
+        if (!candidates.length && work.sourceTitle) {
+          const byTitle = titleMap.get(normalizeText(work.sourceTitle)) || [];
+          if (byTitle.length === 1) candidates = byTitle;
+        }
+        if (candidates.length !== 1) continue;
+        const record = candidates[0];
+        if (!recordMatchesCurrentFilters(record, state)) continue;
+        const evidence = evidenceBySourceid.get(record.sourceid) || [];
+        if (evidence.length < 5 && !evidence.some((item) => item.openalex_work_id === work.openalex_work_id)) {
+          evidence.push(work);
+          evidenceBySourceid.set(record.sourceid, evidence);
+        }
+      }
+
+      const entriesBySourceid = new Map(lexicalEntries.map((entry) => [String(entry.record.sourceid), { ...entry }]));
+      for (const [sourceid, evidence] of evidenceBySourceid) {
+        const record = records.find((item) => String(item.sourceid) === sourceid);
+        if (!record) continue;
+        const semanticScore = evidence.reduce((total, item) => total + item.relevance_score, 0) / evidence.length;
+        const existing = entriesBySourceid.get(sourceid) || { score: 0, record, abstractSummary: null };
+        existing.semanticEvidence = evidence;
+        existing.semanticScore = semanticScore;
+        existing.score += Math.round((semanticScore * 350) + (Math.min(5, evidence.length) * 15));
+        entriesBySourceid.set(sourceid, existing);
+      }
+      const entries = Array.from(entriesBySourceid.values()).sort((left, right) => {
+        if (right.score !== left.score) return right.score - left.score;
+        return compareMetricPriority(left, right);
+      });
+      return {
+        entries,
+        rankingStatus: {
+          mode: "openalex",
+          label: "OpenAlex live hybrid ranking",
+          detail: `${works.length} live semantic works were checked; ${evidenceBySourceid.size} journal profiles matched by verified ISSN or unique exact source title.`,
+        },
+      };
+    } catch (error) {
+      const reason = error?.name === "AbortError" ? "OpenAlex timed out." : String(error?.message || "OpenAlex was unavailable.");
+      return { entries: lexicalEntries, rankingStatus: lexicalFallbackStatus(`${reason} Local static ranking was used.`) };
+    }
   }
 
   function shouldUseLlmAbstractRanking(state) {
@@ -1853,7 +2114,9 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       rankingStatus: defaultRankingStatus(state),
     };
 
-    if (shouldUseLlmAbstractRanking(state) && lexicalEntries.length) {
+    if (shouldUseOpenAlexLive(state)) {
+      prepared = await fuseOpenAlexLive(state, lexicalEntries);
+    } else if (shouldUseLlmAbstractRanking(state) && lexicalEntries.length) {
       prepared = await rerankAbstractEntries(state, lexicalEntries);
     }
 
@@ -2057,13 +2320,13 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     const nextParams = new URLSearchParams();
     const rawQuery = queryInput.value.trim();
 
-    if (rawQuery) {
+    if (rawQuery && (state.scope !== "abstract" || rawQuery.length <= 2000)) {
       nextParams.set("q", rawQuery);
     }
-    if (rawQuery && state.scope !== (pageMode === "home" ? "abstract" : "all")) {
+    if (rawQuery && rawQuery.length <= 2000 && state.scope !== (pageMode === "home" ? "abstract" : "all")) {
       nextParams.set("scope", state.scope);
     }
-    if (rawQuery && state.scope === "abstract" && state.sortOrder !== "default") {
+    if (rawQuery && rawQuery.length <= 2000 && state.scope === "abstract" && state.sortOrder !== "default") {
       nextParams.set("sort", state.sortOrder);
     }
     if (pageMode === "search") {
@@ -2160,6 +2423,12 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       const insightCards = [];
       if (state.scope === "abstract" && abstractSummary) {
         insightCards.push(createInsightBox(abstractSummary, abstractSummary.fitPercentage));
+      }
+      const evidenceBox = createOpenAlexEvidenceBox(
+        entry.semanticEvidence ? { ...record, openalex_evidence: entry.semanticEvidence } : record
+      );
+      if (evidenceBox) {
+        insightCards.push(evidenceBox);
       }
       if (state.scope === "abstract" && entry.llmSummary) {
         const llmInsight = createLlmInsightBox(entry.llmSummary);

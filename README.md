@@ -21,6 +21,37 @@ Journal Discovery is a static journal discovery website designed for public host
 - Shows `Categories`, `Areas`, and `SINTA Subject Area` when available on journal profile pages and search result profile cards.
 - Uses SINTA only for non-metric metadata such as accreditation, subject area, affiliation, and profile links. SINTA numeric metrics and Garuda flags are intentionally not exposed to users.
 - Fills journal website, APC status, license, and copyright fields from DOAJ when a journal matches by ISSN or unique exact title.
+- Uses anonymous OpenAlex semantic search live from the browser for abstract scope. No API key is sent, and Journal Discovery does not persist the submitted abstract or OpenAlex response.
+- Fuses live OpenAlex publication evidence with the deterministic local scorer and falls back fully to static ranking when OpenAlex is unavailable, rate-limited, blocked by CORS, or times out.
+- Keeps the existing LLM bridge source code and tests for optional future use, but production builds now leave LLM reranking disabled unless `LLM_ABSTRACT_MATCH_ENABLED=true` is explicitly set.
+
+## OpenAlex live anonymous discovery
+
+The production model remains GitHub-only. For abstract searches, the browser sends at most 2,000 characters directly to `https://api.openalex.org/works` using anonymous semantic search. Requests use `credentials: "omit"`, `cache: "no-store"`, a 15-second timeout, and a minimum one-second interval. Responses remain in memory and are never written to GitHub, SQLite, local storage, IndexedDB, or the browser URL.
+
+No OpenAlex API key or email is required by the production site or GitHub Actions. Never add an OpenAlex key to frontend code, generated files, GitHub variables, or Pages runtime configuration.
+
+Live works are mapped to static journal profiles by validated ISSN. A unique exact normalized source title is allowed only when no ISSN match is available. Ambiguous matches are discarded. The application shows up to five representative works per matched journal and explicitly treats them as topical evidence, not acceptance probability.
+
+If OpenAlex fails, returns an invalid payload, responds with a non-success status, or exceeds the timeout, the existing local ranking is used without breaking search. The page displays a privacy notice before submission and the Content Security Policy only permits external connections to the official OpenAlex API.
+
+The private SQLite ingestion code remains available for offline experiments but is not part of production deployment and has no scheduled GitHub workflow. If it is used locally, its database stays under the ignored `build/private/` directory:
+
+```bash
+python scripts/refresh_openalex_static.py \
+  --max-journals 100 \
+  --works-per-journal 20 \
+  --operation-budget 5000 \
+  --daily-budget-usd 1.0
+python scripts/build_site.py
+python scripts/validate_generated_data.py
+python scripts/scan_public_artifacts.py
+```
+
+The optional local client restricts outbound traffic to the official HTTPS OpenAlex API, applies bounded retries and response-size limits, and does not log request URLs containing credentials.
+
+The refresh command enforces a persistent UTC-day budget ledger. The maximum accepted value is US$1 per day. It reserves credits before each request, reconciles them with OpenAlex's `X-RateLimit-Credits-Used` response header when available, and stops before the local ledger would exceed 10,000 credits (US$1). Current OpenAlex pricing defines one credit as US$0.0001: list/filter calls use 1 credit, search and semantic search use 10, rerank adds 10, and content downloads use 100. The pipeline currently uses only list/filter calls.
+
 
 ## SINTA data at a glance
 

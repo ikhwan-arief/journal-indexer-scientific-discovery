@@ -11,7 +11,7 @@ import json
 import os
 import re
 import shutil
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Iterable
@@ -32,6 +32,7 @@ DEFAULT_SITE_URL = os.getenv("SITE_URL", "").rstrip("/")
 NOT_AVAILABLE = "Not available"
 INDONESIA_REGION = "Asiatic Region"
 VALID_ACCREDITATIONS = {"S1", "S2", "S3", "S4", "S5", "S6"}
+OPENALEX_DB = Path(os.getenv("OPENALEX_DB_PATH") or BUILD_DIR / "private" / "openalex.sqlite3")
 
 
 @dataclass(slots=True)
@@ -70,6 +71,12 @@ class JournalRecord:
     normalized_publisher: str
     normalized_country: str
     normalized_url: str
+    journal_id: str | None = None
+    openalex_source_id: str | None = None
+    openalex_topics: list[dict[str, object]] = field(default_factory=list)
+    openalex_evidence: list[dict[str, object]] = field(default_factory=list)
+    openalex_search_text: str = ""
+    openalex_data_as_of: str | None = None
 
     @property
     def profile_path(self) -> str:
@@ -129,7 +136,7 @@ class JournalRecord:
         }
 
     def to_search_dict(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "rank": self.rank,
             "sourceid": self.sourceid,
             "source_type": self.source_type,
@@ -161,6 +168,18 @@ class JournalRecord:
             "open_access_diamond": self.open_access_diamond,
             "slug": self.slug,
         }
+        if self.openalex_source_id:
+            payload.update(
+                {
+                    "journal_id": self.journal_id,
+                    "openalex_source_id": self.openalex_source_id,
+                    "openalex_topics": self.openalex_topics,
+                    "openalex_evidence": self.openalex_evidence,
+                    "openalex_search_text": self.openalex_search_text,
+                    "openalex_data_as_of": self.openalex_data_as_of,
+                }
+            )
+        return payload
 
 
 @dataclass(slots=True)
@@ -235,11 +254,12 @@ def slugify(title: str, sourceid: str) -> str:
 
 def safe_url(raw_url: str | None) -> str | None:
     value = (raw_url or "").strip()
-    if not value:
+    if not value or len(value) > 2048:
         return None
-    if value.startswith("http://") or value.startswith("https://"):
-        return value
-    return None
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
+        return None
+    return value
 
 
 def normalize_yes_no(value: str | None) -> str | None:
@@ -611,6 +631,21 @@ def build_records() -> list[JournalRecord]:
         )
         records.append(record)
 
+    if OPENALEX_DB.exists():
+        from journal_discovery.openalex_static.database import OpenAlexDatabase
+
+        enrichment = OpenAlexDatabase(OPENALEX_DB).public_enrichment()
+        for record in records:
+            values = enrichment.get(record.sourceid)
+            if not values:
+                continue
+            record.journal_id = str(values.get("journal_id") or "") or None
+            record.openalex_source_id = str(values.get("openalex_source_id") or "") or None
+            record.openalex_topics = list(values.get("openalex_topics") or [])
+            record.openalex_evidence = list(values.get("openalex_evidence") or [])
+            record.openalex_search_text = normalize_text(str(values.get("openalex_search_text") or ""))
+            record.openalex_data_as_of = str(values.get("openalex_data_as_of") or "") or None
+
     records.sort(
         key=lambda record: (
             record.rank is None,
@@ -860,10 +895,7 @@ def llm_abstract_enabled() -> bool:
     api_url = llm_api_base_url()
     if not api_url:
         return False
-    raw_value = (os.getenv("LLM_ABSTRACT_MATCH_ENABLED") or "").strip()
-    if not raw_value:
-        return True
-    return parse_bool_env("LLM_ABSTRACT_MATCH_ENABLED", default=True)
+    return parse_bool_env("LLM_ABSTRACT_MATCH_ENABLED", default=False)
 
 
 def llm_timeout_ms() -> int:
@@ -911,9 +943,10 @@ def page_csp() -> str:
         "form-action 'self'",
         "frame-ancestors 'none'",
     ]
-    connect_origin = llm_connect_origin()
+    directives.insert(1, "connect-src 'self' https://api.openalex.org")
+    connect_origin = llm_connect_origin() if llm_abstract_enabled() else ""
     if connect_origin:
-        directives.insert(1, f"connect-src 'self' {connect_origin}")
+        directives[1] = f"connect-src 'self' https://api.openalex.org {connect_origin}"
     return "; ".join(directives)
 
 
@@ -926,6 +959,7 @@ def runtime_body_attrs(page: str, site_root: str, data_url: str) -> str:
         "data-llm-api-base-url": llm_api_base_url(),
         "data-llm-timeout-ms": str(llm_timeout_ms()),
         "data-llm-candidate-limit": str(llm_candidate_limit()),
+        "data-openalex-live-enabled": "true",
     }
     return " ".join(
         f'{name}="{html.escape(value, quote=True)}"'
@@ -1026,9 +1060,9 @@ def home_page_html(summary: SiteSummary) -> str:
                 <input type=\"hidden\" id=\"scope\" name=\"scope\" value=\"abstract\">
                 <label class=\"field abstract-field\" for=\"q\">
                   <span>Paste article abstract</span>
-                  <textarea id=\"q\" name=\"q\" rows=\"6\" placeholder=\"Paste an article abstract. The app compares it with journal titles, categories, areas, and SINTA subject areas to suggest relevant journals.\"></textarea>
+                  <textarea id=\"q\" name=\"q\" rows=\"6\" maxlength=\"10000\" placeholder=\"Paste an article abstract. The app compares it with journal titles, categories, areas, OpenAlex topics, and publication evidence to suggest relevant journals.\"></textarea>
                 </label>
-                <p class=\"llm-privacy-note\" id=\"llm-privacy-note\" hidden>When LLM-assisted ranking is enabled, submitted abstracts are sent to the configured inference API for topical reranking.</p>
+                <p class=\"llm-privacy-note\" id=\"llm-privacy-note\">For abstract matching, up to 2,000 characters are sent directly from your browser to the anonymous OpenAlex semantic-search API. The query and response are not stored by Journal Discovery. If OpenAlex is unavailable, local static ranking is used.</p>
                 <div class=\"field hero-sort-field\">
                   <label for=\"sort-order\">Sort results</label>
                   <select id=\"sort-order\" name=\"sort\">
@@ -1113,7 +1147,7 @@ def search_page_html(summary: SiteSummary) -> str:
             <div class=\"hero-content\">
               <h1>Search journal profiles by abstract, keyword, title, publisher, or URL.</h1>
               <p class=\"hero-copy\">Use abstract matching for recommendations, or switch scope and filters for a more precise search across journal metadata, accreditation, and indexing status.</p>
-              <p class=\"llm-privacy-note\" id=\"llm-privacy-note\" hidden>When LLM-assisted ranking is enabled, submitted abstracts are sent to the configured inference API for topical reranking.</p>
+              <p class=\"llm-privacy-note\" id=\"llm-privacy-note\">For abstract scope, up to 2,000 characters are sent directly from your browser to the anonymous OpenAlex semantic-search API. The query and response are not stored by Journal Discovery. If OpenAlex is unavailable, local static ranking is used.</p>
             </div>
           </div>
         </div>
@@ -1133,7 +1167,7 @@ def search_page_html(summary: SiteSummary) -> str:
             <form id=\"search-form\" action=\"./\" method=\"get\" class=\"search-form-grid\">
               <div class=\"field search-query-field\">
                 <label for=\"q\">Search query</label>
-                <textarea id=\"q\" name=\"q\" rows=\"8\" placeholder=\"Paste an abstract or enter a keyword, title, publisher, or URL fragment.\"></textarea>
+                <textarea id=\"q\" name=\"q\" rows=\"8\" maxlength=\"10000\" placeholder=\"Paste an abstract or enter a keyword, title, publisher, or URL fragment.\"></textarea>
               </div>
               <div class=\"search-filter-grid\">
                 <div class=\"field\">
@@ -1324,6 +1358,12 @@ def write_data_json(records: list[JournalRecord], summary: SiteSummary) -> None:
                 "countries": manifest.countries,
                 "chunk_paths": manifest.chunk_paths,
                 "title_prefix_chunks": manifest.title_prefix_chunks,
+                "schema_version": "2",
+                "dataset_version": f"openalex-static-{summary.generated_at[:10]}",
+                "ranking_version": "static-hybrid-v2",
+                "openalex_mode": "live-anonymous",
+                "semantic_realtime": True,
+                "llm_enabled": False,
             },
             ensure_ascii=False,
             separators=(",", ":"),

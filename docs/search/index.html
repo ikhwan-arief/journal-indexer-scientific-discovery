@@ -8,12 +8,12 @@
     <title>Search Journal Profiles | Journal Discovery</title>
     <meta name="description" content="Search journal profiles by abstract, keyword, full title, publisher, URL fragment, country, indexing status, accreditation, or best SJR quartile.">
     <meta name="robots" content="index,follow">
-    <meta http-equiv="Content-Security-Policy" content="default-src &#x27;self&#x27;; img-src &#x27;self&#x27; data:; style-src &#x27;self&#x27;; script-src &#x27;self&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;self&#x27;; form-action &#x27;self&#x27;; frame-ancestors &#x27;none&#x27;">
+    <meta http-equiv="Content-Security-Policy" content="default-src &#x27;self&#x27;; connect-src &#x27;self&#x27; https://api.openalex.org; img-src &#x27;self&#x27; data:; style-src &#x27;self&#x27;; script-src &#x27;self&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;self&#x27;; form-action &#x27;self&#x27;; frame-ancestors &#x27;none&#x27;">
     
-    <link rel="stylesheet" href="../assets/styles.css?v=2026-04-09+07%3A55+UTC">
-    <script defer src="../assets/app.js?v=2026-04-09+07%3A55+UTC"></script>
+    <link rel="stylesheet" href="../assets/styles.css?v=2026-10-27+05%3A50+UTC">
+    <script defer src="../assets/app.js?v=2026-10-27+05%3A50+UTC"></script>
   </head>
-  <body data-page="search" data-site-root=".." data-data-url="../data/search-manifest.json?v=2026-04-09+07%3A55+UTC" data-llm-abstract-enabled="false" data-llm-api-base-url="" data-llm-timeout-ms="8000" data-llm-candidate-limit="50">
+  <body data-page="search" data-site-root=".." data-data-url="../data/search-manifest.json?v=2026-10-27+05%3A50+UTC" data-llm-abstract-enabled="false" data-llm-api-base-url="" data-llm-timeout-ms="8000" data-llm-candidate-limit="50" data-openalex-live-enabled="true">
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
       <div class="shell">
@@ -34,7 +34,7 @@
             <div class="hero-content">
               <h1>Search journal profiles by abstract, keyword, title, publisher, or URL.</h1>
               <p class="hero-copy">Use abstract matching for recommendations, or switch scope and filters for a more precise search across journal metadata, accreditation, and indexing status.</p>
-              <p class="llm-privacy-note" id="llm-privacy-note" hidden>When LLM-assisted ranking is enabled, submitted abstracts are sent to the configured inference API for topical reranking.</p>
+              <p class="llm-privacy-note" id="llm-privacy-note">For abstract scope, up to 2,000 characters are sent directly from your browser to the anonymous OpenAlex semantic-search API. The query and response are not stored by Journal Discovery. If OpenAlex is unavailable, local static ranking is used.</p>
             </div>
           </div>
         </div>
@@ -54,7 +54,7 @@
             <form id="search-form" action="./" method="get" class="search-form-grid">
               <div class="field search-query-field">
                 <label for="q">Search query</label>
-                <textarea id="q" name="q" rows="8" placeholder="Paste an abstract or enter a keyword, title, publisher, or URL fragment."></textarea>
+                <textarea id="q" name="q" rows="8" maxlength="10000" placeholder="Paste an abstract or enter a keyword, title, publisher, or URL fragment."></textarea>
               </div>
               <div class="search-filter-grid">
                 <div class="field">

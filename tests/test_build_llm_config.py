@@ -29,18 +29,19 @@ def test_home_page_includes_connect_src_and_runtime_config(monkeypatch) -> None:
     assert 'data-llm-timeout-ms="9000"' in html
 
 
-def test_home_page_uses_longer_default_timeout_for_local_llm(monkeypatch) -> None:
+def test_home_page_keeps_local_llm_disabled_without_explicit_flag(monkeypatch) -> None:
     monkeypatch.setenv("LLM_API_BASE_URL", "http://127.0.0.1:8000")
     monkeypatch.delenv("LLM_TIMEOUT_MS", raising=False)
     monkeypatch.delenv("LLM_ABSTRACT_MATCH_ENABLED", raising=False)
 
     html = build.home_page_html(sample_summary())
 
-    assert 'data-llm-abstract-enabled="true"' in html
+    assert 'data-llm-abstract-enabled="false"' in html
+    assert "http://127.0.0.1:8000" not in build.page_csp()
     assert 'data-llm-timeout-ms="60000"' in html
 
 
-def test_home_page_uses_render_aware_timeout_default(monkeypatch) -> None:
+def test_home_page_keeps_render_llm_disabled_without_explicit_flag(monkeypatch) -> None:
     monkeypatch.setenv("LLM_API_BASE_URL", "https://journal-discovery-llm-api.onrender.com")
     monkeypatch.delenv("LLM_TIMEOUT_MS", raising=False)
     monkeypatch.delenv("LLM_ABSTRACT_MATCH_ENABLED", raising=False)
@@ -48,7 +49,7 @@ def test_home_page_uses_render_aware_timeout_default(monkeypatch) -> None:
 
     html = build.home_page_html(sample_summary())
 
-    assert 'data-llm-abstract-enabled="true"' in html
+    assert 'data-llm-abstract-enabled="false"' in html
     assert 'data-llm-timeout-ms="90000"' in html
     assert 'data-llm-candidate-limit="10"' in html
 
@@ -60,8 +61,9 @@ def test_home_page_omits_external_connect_src_without_llm(monkeypatch) -> None:
 
     html = build.home_page_html(sample_summary())
 
-    assert "connect-src" not in html
+    assert "https://api.openalex.org" in html
     assert 'data-llm-abstract-enabled="false"' in html
+    assert 'data-openalex-live-enabled="true"' in html
 
 
 def test_home_page_keeps_remote_timeout_default_without_override(monkeypatch) -> None:

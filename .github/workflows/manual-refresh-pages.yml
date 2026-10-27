@@ -53,9 +53,7 @@ jobs:
       - name: Run guarded dataset refresh workflow
         env:
           SITE_URL: ${{ vars.SITE_URL }}
-          LLM_API_BASE_URL: ${{ vars.LLM_API_BASE_URL }}
-          LLM_TIMEOUT_MS: ${{ vars.LLM_TIMEOUT_MS }}
-          LLM_ABSTRACT_MATCH_ENABLED: ${{ vars.LLM_ABSTRACT_MATCH_ENABLED }}
+          LLM_ABSTRACT_MATCH_ENABLED: "false"
         run: |
           set -euo pipefail
           cmd=(python scripts/update_source_data.py --scimago data/raw/scimagojr.csv --wos data/raw/scimagojr_wos.csv --sinta data/raw/sinta.csv)
@@ -66,6 +64,9 @@ jobs:
             cmd+=(--skip-smoke-test)
           fi
           "${cmd[@]}"
+
+      - name: Scan public artifacts
+        run: python scripts/scan_public_artifacts.py
 
       - name: Upload artifact
         if: ${{ inputs.deploy_pages }}

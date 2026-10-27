@@ -528,6 +528,12 @@ button:disabled {
   color: #9f3d18;
 }
 
+.ranking-status-openalex {
+  border-color: #9bc7bb;
+  background: #effaf6;
+  color: #164f43;
+}
+
 .table-filter-pills {
   display: flex;
   flex-wrap: wrap;

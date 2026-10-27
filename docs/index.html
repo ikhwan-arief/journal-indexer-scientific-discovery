@@ -8,12 +8,12 @@
     <title>Journal Discovery | Match journal profiles from article abstracts</title>
     <meta name="description" content="Search journal discovery data built from Scimago, SINTA, WoS, and optional DOAJ enrichment, with abstract-to-journal matching based on journal titles, categories, areas, and SINTA subject areas.">
     <meta name="robots" content="index,follow">
-    <meta http-equiv="Content-Security-Policy" content="default-src &#x27;self&#x27;; img-src &#x27;self&#x27; data:; style-src &#x27;self&#x27;; script-src &#x27;self&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;self&#x27;; form-action &#x27;self&#x27;; frame-ancestors &#x27;none&#x27;">
+    <meta http-equiv="Content-Security-Policy" content="default-src &#x27;self&#x27;; connect-src &#x27;self&#x27; https://api.openalex.org; img-src &#x27;self&#x27; data:; style-src &#x27;self&#x27;; script-src &#x27;self&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;self&#x27;; form-action &#x27;self&#x27;; frame-ancestors &#x27;none&#x27;">
     
-    <link rel="stylesheet" href="assets/styles.css?v=2026-04-09+07%3A55+UTC">
-    <script defer src="assets/app.js?v=2026-04-09+07%3A55+UTC"></script>
+    <link rel="stylesheet" href="assets/styles.css?v=2026-10-27+05%3A50+UTC">
+    <script defer src="assets/app.js?v=2026-10-27+05%3A50+UTC"></script>
   </head>
-  <body data-page="home" data-site-root="." data-data-url="data/search-manifest.json?v=2026-04-09+07%3A55+UTC" data-llm-abstract-enabled="false" data-llm-api-base-url="" data-llm-timeout-ms="8000" data-llm-candidate-limit="50">
+  <body data-page="home" data-site-root="." data-data-url="data/search-manifest.json?v=2026-10-27+05%3A50+UTC" data-llm-abstract-enabled="false" data-llm-api-base-url="" data-llm-timeout-ms="8000" data-llm-candidate-limit="50" data-openalex-live-enabled="true">
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header">
       <div class="shell">
@@ -38,9 +38,9 @@
                 <input type="hidden" id="scope" name="scope" value="abstract">
                 <label class="field abstract-field" for="q">
                   <span>Paste article abstract</span>
-                  <textarea id="q" name="q" rows="6" placeholder="Paste an article abstract. The app compares it with journal titles, categories, areas, and SINTA subject areas to suggest relevant journals."></textarea>
+                  <textarea id="q" name="q" rows="6" maxlength="10000" placeholder="Paste an article abstract. The app compares it with journal titles, categories, areas, OpenAlex topics, and publication evidence to suggest relevant journals."></textarea>
                 </label>
-                <p class="llm-privacy-note" id="llm-privacy-note" hidden>When LLM-assisted ranking is enabled, submitted abstracts are sent to the configured inference API for topical reranking.</p>
+                <p class="llm-privacy-note" id="llm-privacy-note">For abstract matching, up to 2,000 characters are sent directly from your browser to the anonymous OpenAlex semantic-search API. The query and response are not stored by Journal Discovery. If OpenAlex is unavailable, local static ranking is used.</p>
                 <div class="field hero-sort-field">
                   <label for="sort-order">Sort results</label>
                   <select id="sort-order" name="sort">

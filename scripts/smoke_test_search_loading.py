@@ -155,6 +155,7 @@ def disable_llm_runtime(page) -> None:
             "llmTimeoutMs": 5000,
             "llmAbstractEnabled": False,
             "llmCandidateLimit": 50,
+            "openAlexLiveEnabled": False,
         }
     )
     page.add_init_script(

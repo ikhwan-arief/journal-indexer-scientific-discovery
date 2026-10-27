@@ -5,6 +5,7 @@ Lisensi aplikasi: Creative Commons Attribution-NonCommercial 4.0 International (
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -46,6 +47,8 @@ FORBIDDEN_SEARCH_KEYS = {
     "sinta_citations_5yr",
     "sinta_citations_total",
 }
+FORBIDDEN_OBJECT_KEYS = {"__proto__", "prototype", "constructor"}
+OPENALEX_ID_PATTERN = re.compile(r"^[SWT]\d+$")
 
 
 def load_json(path: Path) -> dict[str, object]:
@@ -83,6 +86,25 @@ def validate_search_record(record: dict[str, object], label: str) -> None:
     forbidden_keys = sorted(key for key in FORBIDDEN_SEARCH_KEYS if key in record)
     if forbidden_keys:
         raise SystemExit(f"{label} record exposes forbidden keys: {forbidden_keys}")
+
+    if FORBIDDEN_OBJECT_KEYS.intersection(record):
+        raise SystemExit(f"{label} record contains a prototype-pollution key.")
+
+    source_id = record.get("openalex_source_id")
+    if source_id is not None and not OPENALEX_ID_PATTERN.fullmatch(str(source_id)):
+        raise SystemExit(f"{label} record has an invalid OpenAlex source ID.")
+    topics = record.get("openalex_topics") or []
+    evidence = record.get("openalex_evidence") or []
+    if not isinstance(topics, list) or len(topics) > 20:
+        raise SystemExit(f"{label} record has invalid OpenAlex topics.")
+    if not isinstance(evidence, list) or len(evidence) > 5:
+        raise SystemExit(f"{label} record has invalid OpenAlex evidence.")
+    for item in evidence:
+        if not isinstance(item, dict) or FORBIDDEN_OBJECT_KEYS.intersection(item):
+            raise SystemExit(f"{label} record has invalid OpenAlex evidence content.")
+        work_id = str(item.get("openalex_work_id") or "")
+        if not OPENALEX_ID_PATTERN.fullmatch(work_id) or not work_id.startswith("W"):
+            raise SystemExit(f"{label} record has an invalid OpenAlex work ID.")
 
 
 def load_sinta_issn_lookup() -> dict[str, set[str]]:
@@ -144,6 +166,12 @@ def main() -> int:
     title_prefix_chunks = manifest.get("title_prefix_chunks") or {}
     if not isinstance(title_prefix_chunks, dict) or not title_prefix_chunks:
         raise SystemExit("search-manifest.json does not contain title_prefix_chunks.")
+    if manifest.get("schema_version") != "2" or manifest.get("ranking_version") != "static-hybrid-v2":
+        raise SystemExit("search-manifest.json does not expose the expected static hybrid schema metadata.")
+    if manifest.get("openalex_mode") != "live-anonymous" or manifest.get("semantic_realtime") is not True:
+        raise SystemExit("search-manifest.json must expose anonymous live OpenAlex semantic mode.")
+    if manifest.get("llm_enabled") is not False:
+        raise SystemExit("search-manifest.json must keep LLM mode disabled.")
 
     sourceid_to_chunk = profile_index.get("sourceid_to_chunk") or {}
     if not isinstance(sourceid_to_chunk, dict) or not sourceid_to_chunk:
