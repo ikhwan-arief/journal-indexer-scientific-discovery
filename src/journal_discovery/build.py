@@ -1097,7 +1097,7 @@ def home_page_html(summary: SiteSummary) -> str:
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
         <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan[at]unand.ac.id). Available under CC BY-NC.</div>
-        <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), SINTA, WoS, and DOAJ.</div>
+        <div class=\"footer-note\">Data sources: OpenAlex, Scopus, Scimago Journal Rank (SJR), SINTA, Web of Science (WoS), and DOAJ.</div>
       </div>
     </footer>
   </body>
@@ -1239,7 +1239,7 @@ def search_page_html(summary: SiteSummary) -> str:
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
         <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan[at]unand.ac.id). Available under CC BY-NC.</div>
-        <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), SINTA, WoS, and DOAJ.</div>
+        <div class=\"footer-note\">Data sources: OpenAlex, Scopus, Scimago Journal Rank (SJR), SINTA, Web of Science (WoS), and DOAJ.</div>
       </div>
     </footer>
   </body>
@@ -1291,7 +1291,7 @@ def profile_page_html(summary: SiteSummary) -> str:
     <footer class=\"site-footer\">
       <div class=\"shell footer-grid\">
         <div class=\"footer-note\">Created by Ikhwan Arief (ikhwan[at]unand.ac.id). Available under CC BY-NC.</div>
-        <div class=\"footer-note\">Data sources: Scopus, Scimago Journal Rank (SJR), SINTA, WoS, and DOAJ.</div>
+        <div class=\"footer-note\">Data sources: OpenAlex, Scopus, Scimago Journal Rank (SJR), SINTA, Web of Science (WoS), and DOAJ.</div>
       </div>
     </footer>
   </body>
