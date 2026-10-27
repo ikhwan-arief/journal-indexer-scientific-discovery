@@ -15,19 +15,19 @@ Journal Discovery is a static journal discovery website designed for public host
 - Provides a large abstract input on the front page so users can paste an article abstract and search for matching journals inline.
 - Can optionally rerank abstract-search shortlists through an external LLM API while keeping the current client-side lexical scorer as the first-stage retriever and fallback path.
 - Shows the `SJR Best Quartile` on a single runtime-loaded journal profile page keyed by stable `sourceid` values.
-- Exposes a search page for abstract, keyword, title, URL fragment, country, index filter, accreditation filter, quartile filter, and abstract-fit result sorting.
+- Exposes a search page with distinct scopes for abstracts, article titles/research topics, journal titles, publishers, and URLs, plus country, index, accreditation, quartile, and fit sorting controls.
 - Applies lightweight NLP preprocessing to abstract and keyword search: normalization, tokenization, stop-word removal (English + Indonesian), and conservative stemming.
 - Scores abstract matching from the journal `Title`, `Categories`, `Areas`, and `Subject Area` fields when available, with generic abstract terms weighted below specific topical terms plus phrase-aware matching and conservative acronym/synonym expansion for recurring SME, AI, and digital-transformation concepts.
 - Shows `Categories`, `Areas`, and `SINTA Subject Area` when available on journal profile pages and search result profile cards.
 - Uses SINTA only for non-metric metadata such as accreditation, subject area, affiliation, and profile links. SINTA numeric metrics and Garuda flags are intentionally not exposed to users.
 - Fills journal website, APC status, license, and copyright fields from DOAJ when a journal matches by ISSN or unique exact title.
-- Uses anonymous OpenAlex semantic search live from the browser for abstract scope. No API key is sent, and Journal Discovery does not persist the submitted abstract or OpenAlex response.
+- Uses anonymous OpenAlex semantic search live from the browser for abstract and article-title/research-topic scopes. No API key is sent, and Journal Discovery does not persist the submitted query or OpenAlex response.
 - Fuses live OpenAlex publication evidence with the deterministic local scorer and falls back fully to static ranking when OpenAlex is unavailable, rate-limited, blocked by CORS, or times out.
 - Keeps the existing LLM bridge source code and tests for optional future use, but production builds now leave LLM reranking disabled unless `LLM_ABSTRACT_MATCH_ENABLED=true` is explicitly set.
 
 ## OpenAlex live anonymous discovery
 
-The production model remains GitHub-only. For abstract searches, the browser sends at most 2,000 characters directly to `https://api.openalex.org/works` using anonymous semantic search. Requests use `credentials: "omit"`, `cache: "no-store"`, a 15-second timeout, and a minimum one-second interval. Responses remain in memory and are never written to GitHub, SQLite, local storage, IndexedDB, or the browser URL.
+The production model remains GitHub-only. For abstract and article-title/research-topic searches, the browser sends at most 2,000 characters directly to `https://api.openalex.org/works` using anonymous semantic search. The separate journal-title scope remains an exact lexical discovery path. Requests use `credentials: "omit"`, `cache: "no-store"`, a 15-second timeout, and a minimum one-second interval. Responses remain in memory and are never written to GitHub, SQLite, local storage, or IndexedDB.
 
 No OpenAlex API key or email is required by the production site or GitHub Actions. Never add an OpenAlex key to frontend code, generated files, GitHub variables, or Pages runtime configuration.
 

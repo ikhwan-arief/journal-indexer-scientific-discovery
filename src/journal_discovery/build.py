@@ -1175,7 +1175,8 @@ def search_page_html(summary: SiteSummary) -> str:
                   <select id=\"scope\" name=\"scope\">
                     <option value=\"all\">Keywords, titles, publishers, countries, and URLs</option>
                     <option value=\"abstract\">Abstract-to-topic matching</option>
-                    <option value=\"title\">Title only</option>
+                    <option value=\"article_topic\">Article title / research topic</option>
+                    <option value=\"title\">Journal title only</option>
                     <option value=\"publisher\">Publisher only</option>
                     <option value=\"url\">URL only</option>
                   </select>

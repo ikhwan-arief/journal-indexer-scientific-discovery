@@ -477,6 +477,22 @@ def main() -> int:
         if not long_lexical_first_title:
             raise AssertionError("Expected long abstract lexical search to render a first result.")
 
+        article_topic_page = new_smoke_page(browser)
+        article_topic_page.goto(f"{base_url}/search/", wait_until="networkidle")
+        article_topic_page.wait_for_selector("#search-form")
+        submit_search(
+            article_topic_page,
+            "machine learning for diabetic retinopathy detection from fundus images",
+            scope="article_topic",
+        )
+        article_topic_page.wait_for_selector(".match-insight strong", timeout=20000)
+        article_topic_label = article_topic_page.locator(".match-insight strong").first.inner_text().strip()
+        if not article_topic_label.startswith("Research-topic fit:"):
+            raise AssertionError(f"Expected research-topic fit label, got: {article_topic_label}")
+        article_topic_params = urlparse(article_topic_page.url).query
+        if "scope=article_topic" not in article_topic_params:
+            raise AssertionError(f"Expected article-topic scope in the synchronized URL, got: {article_topic_page.url}")
+
         llm_success_page = new_smoke_page(browser)
         llm_success_requests: list[dict[str, object]] = []
         configure_llm_runtime(llm_success_page, base_url, candidate_depth=5)

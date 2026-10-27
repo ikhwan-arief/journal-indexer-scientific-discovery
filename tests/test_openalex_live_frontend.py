@@ -28,3 +28,23 @@ def test_live_client_has_privacy_and_resource_controls() -> None:
     assert "OPENALEX_MIN_INTERVAL_MS = 1000" in source
     assert 'url.searchParams.set("search.semantic", effectiveQuery)' in source
     assert "api_key" not in source.lower()
+
+
+def test_article_title_scope_uses_contextual_openalex_ranking() -> None:
+    source = APP_JS.read_text(encoding="utf-8")
+    assert 'scope === "abstract" || scope === "article_topic"' in source
+    assert 'scope === "article_topic" ? "Research-topic fit" : "Abstract fit"' in source
+
+    html = build.search_page_html(
+        build.SiteSummary(
+            total_journals=0,
+            total_scopus=0,
+            total_wos=0,
+            total_doaj=0,
+            total_with_quartile=0,
+            total_missing_websites=0,
+            generated_at="test",
+        )
+    )
+    assert '<option value="article_topic">Article title / research topic</option>' in html
+    assert '<option value="title">Journal title only</option>' in html

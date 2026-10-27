@@ -182,6 +182,10 @@ function isPreciseScope(scope) {
   return scope === "title" || scope === "publisher" || scope === "url";
 }
 
+function isContextualScope(scope) {
+  return scope === "abstract" || scope === "article_topic";
+}
+
 function stemToken(token) {
   if (!token || token.length < 3) {
     return token;
@@ -834,7 +838,7 @@ function fuzzyScore(text, query) {
 }
 
 function matchScope(record, scope) {
-  if (scope === "abstract") return record.topic_text || "";
+  if (isContextualScope(scope)) return record.topic_text || "";
   if (scope === "title") return record.normalized_title || "";
   if (scope === "publisher") return record.normalized_publisher || "";
   if (scope === "url") return record.normalized_url || "";
@@ -842,7 +846,7 @@ function matchScope(record, scope) {
 }
 
 function matchScopeTokenSet(record, scope) {
-  if (scope === "abstract") return record.topic_token_set || new Set();
+  if (isContextualScope(scope)) return record.topic_token_set || new Set();
   if (scope === "title") return record.title_token_set || new Set();
   if (scope === "publisher") return record.publisher_token_set || new Set();
   if (scope === "url") return record.url_token_set || new Set();
@@ -1029,7 +1033,7 @@ function scoreRecord(record, query, scope) {
   if (!query.hasRawQuery) {
     return 1;
   }
-  if (scope === "abstract") {
+  if (isContextualScope(scope)) {
     return abstractScore(record, query);
   }
   if (scope === "all") {
@@ -1038,12 +1042,12 @@ function scoreRecord(record, query, scope) {
   return preciseScopeScore(record, query, scope);
 }
 
-function createInsightBox(insight, fitPercentage) {
+function createInsightBox(insight, fitPercentage, scope = "abstract") {
   const wrapper = document.createElement("div");
   wrapper.className = "match-insight";
 
   const heading = document.createElement("strong");
-  heading.textContent = `Abstract fit: ${fitPercentage}%`;
+  heading.textContent = `${scope === "article_topic" ? "Research-topic fit" : "Abstract fit"}: ${fitPercentage}%`;
   wrapper.appendChild(heading);
 
   const description = document.createElement("span");
@@ -1052,7 +1056,8 @@ function createInsightBox(insight, fitPercentage) {
   wrapper.appendChild(description);
 
   const guidance = document.createElement("span");
-  guidance.textContent = "100% means the abstract aligns very strongly with this journal's Title, Categories, Areas, and SINTA Subject Area when available. Generic method words count less than specific topic terms. Compare this percentage within the current search only; it is not a journal quality metric.";
+  const queryLabel = scope === "article_topic" ? "article title or research topic" : "abstract";
+  guidance.textContent = `100% means the ${queryLabel} aligns very strongly with this journal's Title, Categories, Areas, and SINTA Subject Area when available. Generic method words count less than specific topic terms. Compare this percentage within the current search only; it is not a journal quality metric.`;
   wrapper.appendChild(guidance);
 
   return wrapper;
@@ -1065,7 +1070,7 @@ function createOpenAlexEvidenceBox(record) {
   const wrapper = document.createElement("section");
   wrapper.className = "match-insight openalex-evidence";
   const heading = document.createElement("strong");
-  heading.textContent = "OpenAlex publication evidence";
+  heading.textContent = "Available online publication(s)";
   wrapper.appendChild(heading);
   const list = document.createElement("ul");
   for (const work of works) {
@@ -1605,7 +1610,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
   if (quartileSelect) quartileSelect.value = params.get("quartile") || "all";
   if (countrySelect) countrySelect.value = params.get("country") || "all";
   if (sortSelect) sortSelect.value = normalizeSortOrder(params.get("sort") || "default");
-  if (sortSelect?.value === "fit_desc" && currentScope() !== "abstract" && scopeField.tagName === "SELECT") {
+  if (sortSelect?.value === "fit_desc" && !isContextualScope(currentScope()) && scopeField.tagName === "SELECT") {
     scopeField.value = "abstract";
   }
   page = Math.max(1, Number.parseInt(params.get("page") || "1", 10) || 1);
@@ -1675,12 +1680,12 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     }
 
     let sortOrder = normalizeSortOrder(sortSelect.value || "default");
-    if (sortOrder === "fit_desc" && scope !== "abstract") {
+    if (sortOrder === "fit_desc" && !isContextualScope(scope)) {
       sortOrder = "default";
       sortSelect.value = sortOrder;
     }
 
-    sortSelect.title = scope === "abstract" ? "" : "Highest abstract fit applies only to abstract scope.";
+    sortSelect.title = isContextualScope(scope) ? "" : "Highest fit applies only to contextual abstract or research-topic scopes.";
     return sortOrder;
   }
 
@@ -1718,7 +1723,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
   }
 
   function defaultRankingStatus(state) {
-    if (state.scope !== "abstract" || !state.query.hasRawQuery) {
+    if (!isContextualScope(state.scope) || !state.query.hasRawQuery) {
       return null;
     }
     if (!runtimeConfig.openAlexLiveEnabled) {
@@ -1728,7 +1733,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
   }
 
   function shouldUseOpenAlexLive(state) {
-    return state.scope === "abstract"
+    return isContextualScope(state.scope)
       && state.query.hasRawQuery
       && state.query.shouldLoad
       && runtimeConfig.openAlexLiveEnabled;
@@ -2291,11 +2296,11 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       if (state.quartileFilter !== "all" && record.sjr_best_quartile !== state.quartileFilter) continue;
       if (state.countryFilter !== "all" && record.country !== state.countryFilter) continue;
 
-      const abstractSummary = useQuery && state.scope === "abstract"
+      const abstractSummary = useQuery && isContextualScope(state.scope)
         ? abstractMatchSummary(record, state.query)
         : null;
       const score = useQuery
-        ? (state.scope === "abstract" ? abstractSummary?.score || 0 : scoreRecord(record, state.query, state.scope))
+        ? (isContextualScope(state.scope) ? abstractSummary?.score || 0 : scoreRecord(record, state.query, state.scope))
         : 1;
       if (!useQuery || score > 0) {
         matched.push({ score, record, abstractSummary });
@@ -2303,7 +2308,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     }
 
     matched.sort((left, right) => {
-      if (useQuery && state.scope === "abstract") {
+      if (useQuery && isContextualScope(state.scope)) {
         if (state.sortOrder === "fit_desc") {
           const fitGap = abstractFitValue(right) - abstractFitValue(left);
           if (fitGap !== 0) return fitGap;
@@ -2329,7 +2334,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
     if (rawQuery && rawQuery.length <= MAX_SEARCH_INPUT_CHARS && state.scope !== (pageMode === "home" ? "abstract" : "all")) {
       nextParams.set("scope", state.scope);
     }
-    if (rawQuery && rawQuery.length <= MAX_SEARCH_INPUT_CHARS && state.scope === "abstract" && state.sortOrder !== "default") {
+    if (rawQuery && rawQuery.length <= MAX_SEARCH_INPUT_CHARS && isContextualScope(state.scope) && state.sortOrder !== "default") {
       nextParams.set("sort", state.sortOrder);
     }
     if (pageMode === "search") {
@@ -2424,8 +2429,8 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
       article.appendChild(layout);
 
       const insightCards = [];
-      if (state.scope === "abstract" && abstractSummary) {
-        insightCards.push(createInsightBox(abstractSummary, abstractSummary.fitPercentage));
+      if (isContextualScope(state.scope) && abstractSummary) {
+        insightCards.push(createInsightBox(abstractSummary, abstractSummary.fitPercentage, state.scope));
       }
       const evidenceBox = createOpenAlexEvidenceBox(
         entry.semanticEvidence ? { ...record, openalex_evidence: entry.semanticEvidence } : record
@@ -2506,7 +2511,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
 
   for (const element of [scopeField, indexSelect, accreditationSelect, quartileSelect, countrySelect].filter(Boolean)) {
     element.addEventListener("change", () => {
-      if (element === scopeField && sortSelect && currentScope() !== "abstract") {
+      if (element === scopeField && sortSelect && !isContextualScope(currentScope())) {
         sortSelect.value = "default";
       }
       page = 1;
@@ -2518,7 +2523,7 @@ function renderSearchExperience(manifest, siteRoot, pageMode, runtimeConfig) {
 
   if (sortSelect) {
     sortSelect.addEventListener("change", () => {
-      if (sortSelect.value === "fit_desc" && currentScope() !== "abstract" && scopeField.tagName === "SELECT") {
+      if (sortSelect.value === "fit_desc" && !isContextualScope(currentScope()) && scopeField.tagName === "SELECT") {
         scopeField.value = "abstract";
       }
       page = 1;
